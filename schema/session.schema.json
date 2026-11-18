@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://encore.niracler.com/schema/session.schema.json",
+  "title": "Encore Session Replay",
+  "description": "Self-contained intermediate representation (session.json) for AI agent session replays in Encore.",
+  "type": "object",
+  "required": ["tool", "title", "items"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional JSON Schema reference."
+    },
+    "tool": {
+      "type": "string",
+      "enum": ["codex", "claude-code", "claude-ai", "workbuddy"],
+      "description": "Source AI agent environment identifier."
+    },
+    "model": {
+      "type": "string",
+      "description": "Primary LLM model identifier used during the session."
+    },
+    "lang": {
+      "type": "string",
+      "enum": ["zh", "en"],
+      "description": "Default UI language for the player."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Session title displayed in the header and browser tab."
+    },
+    "description": {
+      "type": "string",
+      "description": "Opening story intro displayed on the empty stage before playback begins."
+    },
+    "started": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp of the first item in the session."
+    },
+    "ended": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp of the last item in the session."
+    },
+    "tokens": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Peak or total token count recorded in the session."
+    },
+    "contextWindow": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Context window token capacity (e.g. 200000 or 1000000)."
+    },
+    "initialContext": {
+      "type": "object",
+      "description": "Initial mounted context records captured from the session preamble.",
+      "properties": {
+        "sys": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/contextRecord" }
+        },
+        "schema": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/contextRecord" }
+        },
+        "mem": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/contextRecord" }
+        },
+        "skill": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/contextRecord" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "frames": {
+      "type": "array",
+      "description": "Curated visual milestone frames (.webp) extracted or referenced during the session.",
+      "items": { "$ref": "#/$defs/sessionFrame" }
+    },
+    "audioClips": {
+      "type": "array",
+      "description": "Optional audio clips generated during the session.",
+      "items": { "$ref": "#/$defs/audioClip" }
+    },
+    "deliverables": {
+      "type": "array",
+      "description": "Final deliverables presented at the end of the replay.",
+      "items": { "$ref": "#/$defs/deliverable" }
+    },
+    "items": {
+      "type": "array",
+      "description": "Ordered sequence of normalized conversation and tool events.",
+      "items": { "$ref": "#/$defs/sessionItem" }
+    }
+  },
+  "$defs": {
+    "contextRecord": {
+      "type": "object",
+      "required": ["id", "title", "payload"],
+      "properties": {
+        "id": { "type": "string" },
+        "tag": { "type": "string" },
+        "title": { "type": "string" },
+        "meta": { "type": "string" },
+        "tokEst": { "type": "integer", "minimum": 0 },
+        "stepIndex": { "type": "integer" },
+        "payload": { "type": "string" },
+        "images": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "sessionFrame": {
+      "type": "object",
+      "required": ["img"],
+      "properties": {
+        "time": { "type": "string" },
+        "img": { "type": "string" },
+        "who": { "type": "string", "enum": ["you", "ai"] },
+        "label": { "type": "string" },
+        "w": { "type": "integer", "minimum": 1 },
+        "h": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "audioClip": {
+      "type": "object",
+      "required": ["src"],
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "src": { "type": "string" },
+        "time": { "type": "string" }
+      }
+    },
+    "deliverable": {
+      "type": "object",
+      "required": ["title"],
+      "properties": {
+        "title": { "type": "string" },
+        "href": { "type": "string" },
+        "meta": { "type": "string" },
+        "cover": { "type": "string" }
+      }
+    },
+    "sessionItem": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["user", "assistant", "reasoning", "tool", "compact"]
+        },
+        "text": { "type": "string" },
+        "time": { "type": "string" },
+        "done": { "type": "string" },
+        "name": { "type": "string" },
+        "kind": { "type": "string" },
+        "summary": { "type": "string" },
+        "input": { "type": "string" },
+        "output": { "type": "string" },
+        "file": { "type": "string" },
+        "files": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "skill": { "type": "string" },
+        "agent": { "type": "string" },
+        "question": { "type": "boolean" },
+        "answer": { "type": "boolean" },
+        "contextTokens": { "type": "integer", "minimum": 0 },
+        "images": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "omittedImages": { "type": "integer", "minimum": 0 },
+        "stats": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "seq": { "type": "integer", "minimum": 1 },
+        "trigger": { "type": "string" },
+        "preTokens": { "type": "integer", "minimum": 0 },
+        "postTokens": { "type": "integer", "minimum": 0 },
+        "droppedTokens": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

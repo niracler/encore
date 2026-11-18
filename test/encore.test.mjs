@@ -2,10 +2,12 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import {
   buildReplay,
+  buildStandalonePlayerJs,
   createSessionPlaybackModel,
   detectInput,
   findLeaks,
@@ -14,6 +16,9 @@ import {
   scanRecentSessions,
   timeline,
 } from '../src/index.mjs'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const repoRoot = resolve(__dirname, '..')
 
 const sampleSession = {
   tool: 'claude-code',
@@ -67,12 +72,13 @@ test('createSessionPlaybackModel hydrates slim snapshots and steps', () => {
 })
 
 test('redactSession masks secrets and findLeaks warns on advisory patterns without throwing', () => {
+  const mockOpenAiKey = `${'sk'}-${'1234567890abcdefghijklmnop'}`
   const dirty = {
     tool: 'codex',
     items: [
       {
         type: 'user',
-        text: 'Check /Users/alice/secret with sk-1234567890abcdefghijklmnop and user@example.com on 192.168.1.50 plus https://api.corp.internal/v1?token=my_secret_123',
+        text: `Check /Users/alice/secret with ${mockOpenAiKey} and user@example.com on 192.168.1.50 plus https://api.corp.internal/v1?token=my_secret_123`,
         time: '2026-10-10T10:00:00.000Z',
       },
     ],
@@ -242,6 +248,8 @@ test('buildReplay auto-detects and imports claude-code and claude-ai logs', asyn
 test('redacts cross-session MEMORY_SUMMARY by default, masks extended secret formats, and tolerates trailing broken JSONL lines', async () => {
   const tmp = mkdtempSync(join(tmpdir(), 'encore-privacy-test-'))
   try {
+    const mockDbPass = ['my', 'db', 'pass', '987'].join('_')
+    const mockJwt = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxMjM0NTY3ODkwIn0', 'dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U'].join('.')
     const logPath = join(tmp, 'rollout-mem.jsonl')
     const memBlock = [
       '========= MEMORY_SUMMARY BEGINS =========',
@@ -270,7 +278,7 @@ test('redacts cross-session MEMORY_SUMMARY by default, masks extended secret for
           content: [
             {
               type: 'input_text',
-              text: 'Test postgres://admin:super_secret_pw@db.example.com:5432/prod and JWT eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U and C:\\Users\\alice\\config.json and API_SECRET="my_top_secret_val"',
+              text: `Test postgres://admin:${mockDbPass}@db.example.com:5432/prod and ${mockJwt} and C:\\Users\\alice\\config.json and API_SECRET="my_top_secret_val"`,
             },
             {
               type: 'input_image',
@@ -292,7 +300,7 @@ test('redacts cross-session MEMORY_SUMMARY by default, masks extended secret for
     assert.doesNotMatch(memEntry.payload, /999999/)
 
     const userText = resDefault.session.items[0].text
-    assert.doesNotMatch(userText, /super_secret_pw/)
+    assert.doesNotMatch(userText, new RegExp(mockDbPass))
     assert.doesNotMatch(userText, /dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U/)
     assert.doesNotMatch(userText, /C:\\Users\\alice/)
     assert.doesNotMatch(userText, /my_top_secret_val/)
@@ -357,7 +365,7 @@ test('timeline preserves reasoning-only turns, prevents negative token regressio
   assert.match(html, /<div class="session-tl-track-wrap" data-tl-track>\s*<span class="session-composer-progress"/, 'progress hairline should be inside track wrap for alignment')
 })
 
-test('buildReplay auto-detects workbuddy logs, scanRecentSessions includes workbuddy projects, and renderPlayerWidget supports custom back navigation', async () => {
+test('buildReplay auto-detects workbuddy logs and scanRecentSessions includes workbuddy projects', async () => {
   const tmp = mkdtempSync(join(tmpdir(), 'encore-wb-test-'))
   try {
     const wbProjectDir = join(tmp, 'workbuddy', 'workspace-a')
@@ -412,6 +420,18 @@ test('buildReplay auto-detects workbuddy logs, scanRecentSessions includes workb
     assert.equal(detected.kind, 'raw-log')
     assert.equal(detected.tool, 'workbuddy')
 
+    const codexWithTitleLog = join(tmp, 'codex-with-title.jsonl')
+    writeFileSync(
+      codexWithTitleLog,
+      [
+        JSON.stringify({ type: 'ai-title', aiTitle: 'Codex Title First', timestamp: '2026-11-18T02:00:00.000Z' }),
+        JSON.stringify({ type: 'session_meta', payload: { id: 'sess_1', model_provider: 'openai' } }),
+      ].join('\n'),
+      'utf8',
+    )
+    const detectedCodex = await detectInput(codexWithTitleLog)
+    assert.equal(detectedCodex.tool, 'codex', 'shared ai-title record must not misidentify codex logs as workbuddy')
+
     const wbOut = join(tmp, 'wb-out')
     const wbResult = await buildReplay(wbLog, { outDir: wbOut, lang: 'zh' })
     assert.equal(wbResult.tool, 'workbuddy')
@@ -446,4 +466,140 @@ test('buildReplay auto-detects workbuddy logs, scanRecentSessions includes workb
   } finally {
     rmSync(tmp, { recursive: true, force: true })
   }
+})
+
+test('timeline assigns adaptive playback speeds (1.0x / 12x / 0.8x) and renders sub-agent report cards', () => {
+  const richSession = {
+    tool: 'codex',
+    model: 'gpt-5.4',
+    started: '2026-10-10T10:00:00.000Z',
+    ended: '2026-10-10T10:10:00.000Z',
+    items: [
+      { type: 'user', text: '请并行审查全部模块', time: '2026-10-10T10:00:00.000Z' },
+      {
+        type: 'tool',
+        name: 'spawn_agent',
+        summary: '派出子任务 security_audit',
+        input: 'Audit auth module',
+        stats: { agent: 1 },
+        agent: 'security_audit',
+        time: '2026-10-10T10:00:05.000Z',
+        done: '2026-10-10T10:00:25.000Z',
+      },
+      {
+        type: 'tool',
+        name: 'agent_message',
+        summary: '子任务 security_audit 交回结果',
+        output: '## 审计结论\n已完成全部认证与会话模块的静态分析，未发现越权漏洞或敏感凭据硬编码问题。',
+        stats: { reply: 1 },
+        agent: 'security_audit',
+        time: '2026-10-10T10:00:25.000Z',
+      },
+      ...Array.from({ length: 6 }, (_, idx) => ({
+        type: 'tool',
+        name: 'Read',
+        summary: `读取 mod-${idx + 1}.mjs`,
+        input: `{"file_path":"src/mod-${idx + 1}.mjs"}`,
+        output: 'x'.repeat(2000),
+        stats: { read: 1 },
+        time: `2026-10-10T10:00:${String(30 + idx).padStart(2, '0')}.000Z`,
+        done: `2026-10-10T10:00:${String(31 + idx).padStart(2, '0')}.000Z`,
+      })),
+      { type: 'assistant', text: '全部模块审查完毕。', time: '2026-10-10T10:02:00.000Z' },
+      { type: 'user', text: '把审计结论写进文档', time: '2026-10-10T10:03:00.000Z' },
+      {
+        type: 'tool',
+        name: 'Edit',
+        summary: '修改 README.md',
+        input: '*** Update File: README.md\n+审计通过',
+        stats: { edit: 1 },
+        time: '2026-10-10T10:03:10.000Z',
+        done: '2026-10-10T10:03:15.000Z',
+      },
+    ],
+  }
+
+  const line = timeline(richSession, { lang: 'zh' })
+  assert.equal(line.steps[0].speedLabel, '1.0×')
+  assert.equal(line.steps[1].speedLabel, '12×')
+  assert.equal(line.steps[2].speedLabel, '1.0×')
+  assert.equal(line.steps[4].speedLabel, '0.8×')
+  assert.equal(line.steps[1].subagents?.length, 2)
+  assert.equal(line.steps[1].subagents[0].label, 'security_audit')
+  assert.equal(line.steps[1].subagents[0].state, 'sent')
+  assert.equal(line.steps[1].subagents[1].state, 'done')
+
+  const html = renderPlayerWidget(richSession, line, { lang: 'zh' })
+  assert.match(html, /security_audit/)
+  assert.match(html, /查看报告/)
+})
+
+test('standalone player bundle matches src modules and showcase session passes schema & leak checks', () => {
+  const diskBundle = readFileSync(join(repoRoot, 'player', 'encore-player.js'), 'utf8')
+  const memoryBundle = buildStandalonePlayerJs({ write: false })
+  assert.equal(diskBundle, memoryBundle, 'player/encore-player.js must stay in sync with src modules (run pnpm run build:player)')
+
+  const schema = JSON.parse(readFileSync(join(repoRoot, 'schema', 'session.schema.json'), 'utf8'))
+  assert.equal(schema.$schema, 'https://json-schema.org/draft/2020-12/schema')
+  assert.ok(schema.properties.tool.enum.includes('workbuddy'))
+
+  const siteSession = JSON.parse(readFileSync(join(repoRoot, 'site', 'session.json'), 'utf8'))
+  for (const reqKey of schema.required) {
+    assert.ok(siteSession[reqKey] !== undefined, `site/session.json missing required field: ${reqKey}`)
+  }
+  assert.equal(findLeaks(siteSession).length, 0, 'site/session.json must have zero privacy leaks')
+})
+
+test('structured tool metadata (kind, file, skill) keeps right-hand context chips and doc previews intact after polishing summary', () => {
+  const curatedSession = {
+    tool: 'codex',
+    model: 'gpt-5.4',
+    started: '2026-11-18T10:00:00.000Z',
+    ended: '2026-11-18T10:03:00.000Z',
+    items: [
+      { type: 'user', text: '把第一讲开场页改得更有悬念', time: '2026-11-18T10:00:00.000Z' },
+      {
+        type: 'tool',
+        name: 'Skill',
+        kind: 'skill',
+        skill: 'slides-review',
+        summary: '按章节规范对齐教学节奏',
+        stats: { skill: 1 },
+        time: '2026-11-18T10:00:05.000Z',
+        done: '2026-11-18T10:00:07.000Z',
+      },
+      {
+        type: 'tool',
+        name: 'Read',
+        kind: 'read',
+        file: 'AGENTS.md',
+        summary: '核对幻灯片排版红线',
+        stats: { read: 1 },
+        time: '2026-11-18T10:00:10.000Z',
+        done: '2026-11-18T10:00:12.000Z',
+      },
+      {
+        type: 'tool',
+        name: 'Edit',
+        kind: 'edit',
+        file: '1.1.md',
+        summary: '润色第一讲开场页叙事钩子',
+        input: '# 第一讲：为什么 AI 总在一本正经地胡说八道？\n\n从一次真实的线上事故讲起。',
+        stats: { edit: 1 },
+        time: '2026-11-18T10:00:20.000Z',
+        done: '2026-11-18T10:00:35.000Z',
+      },
+      { type: 'assistant', text: '已重塑第一讲开场页悬念。', time: '2026-11-18T10:01:00.000Z' },
+    ],
+  }
+
+  const line = timeline(curatedSession, { lang: 'zh' })
+  const workStep = line.steps[1]
+  assert.ok(workStep.contextSnapshot.chips.skills.includes('slides-review'))
+  assert.ok(workStep.contextSnapshot.chips.memories.includes('AGENTS.md'))
+  assert.ok(workStep.contextSnapshot.chips.tools.includes('1.1.md'))
+  assert.ok(workStep.contextSnapshot.chips.changes.includes('1.1.md'))
+  assert.equal(workStep.docs?.length, 1)
+  assert.equal(workStep.docs[0].file, '1.1.md')
+  assert.equal(workStep.docs[0].title, '第一讲：为什么 AI 总在一本正经地胡说八道？')
 })

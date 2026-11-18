@@ -149,7 +149,22 @@ function describeCodexCode(code) {
   if (images) parts.push(`查看 ${images} 张图片`)
   if (others.length) parts.push(`调用 ${[...new Set(others.map(name => name.replace(/^mcp__[^_]+(?:_[^_]+)*?__/, '')))].join('、')}`)
   const summary = parts.join('；') || '运行代码'
-  return { name: 'exec', summary: summary.length > 120 ? `${summary.slice(0, 119)}…` : summary, input: code, stats }
+  const uniqueFiles = [...new Set(files.filter(Boolean))]
+  const file = uniqueFiles[0]
+  const skill = String(code || '').match(/skills\/([\w-]+)\/SKILL\.md\b/)?.[1]
+  const primaryKind = uniqueFiles.length
+    ? 'edit'
+    : (commands.length ? 'command' : (queries.length ? 'search' : (pages.length ? 'open' : (images ? 'view' : 'code'))))
+  return {
+    name: 'exec',
+    kind: primaryKind,
+    summary: summary.length > 120 ? `${summary.slice(0, 119)}…` : summary,
+    input: code,
+    stats,
+    file,
+    files: uniqueFiles.length > 1 ? uniqueFiles : undefined,
+    skill,
+  }
 }
 
 const normAgentName = value => String(value || '').split('/').filter(Boolean).pop() || String(value || '').trim()
@@ -348,7 +363,9 @@ export function readCodex(records, { includeMemory = false } = {}) {
         payload.call_id,
         payload.name === 'exec'
           ? describeCodexCode(payload.input)
-          : { name: payload.name, summary: payload.name, input: payload.input, stats: { other: 1 } },
+          : (payload.name === 'apply_patch'
+            ? describeTool(payload.name, payload.input)
+            : { name: payload.name, kind: 'other', summary: payload.name, input: payload.input, stats: { other: 1 } }),
         time
       )
     } else if (payload.type === 'function_call') {
@@ -357,14 +374,14 @@ export function readCodex(records, { includeMemory = false } = {}) {
         transcript.assistant((args.questions || []).map(question => question.title || question.question).join('\n'), time, { question: true })
       } else if (payload.name === 'spawn_agent' || payload.name === 'collaboration__spawn_agent') {
         const agentKey = normAgentName(args.task_name)
-        working.set(agentKey, transcript.tool(payload.call_id, { name: payload.name, summary: `派出子任务 ${args.task_name}`, stats: { agent: 1 }, agent: agentKey }, time))
+        working.set(agentKey, transcript.tool(payload.call_id, { name: payload.name, kind: 'agent', summary: `派出子任务 ${args.task_name}`, stats: { agent: 1 }, agent: agentKey }, time))
       } else if (['send_message', 'followup_task', 'collaboration__send_message', 'collaboration__followup_task'].includes(payload.name)) {
         const isFollowup = payload.name.endsWith('followup_task')
         const agentKey = normAgentName(args.target)
-        const item = transcript.tool(payload.call_id, { name: payload.name, summary: `${isFollowup ? '给子任务追加任务' : '给子任务发消息'} ${args.target}`, stats: { other: 1 }, agent: agentKey }, time)
+        const item = transcript.tool(payload.call_id, { name: payload.name, kind: 'other', summary: `${isFollowup ? '给子任务追加任务' : '给子任务发消息'} ${args.target}`, stats: { other: 1 }, agent: agentKey }, time)
         if (isFollowup && agentKey) working.set(agentKey, item)
       } else if (payload.name === 'wait' || payload.name === 'collaboration__wait_agent') {
-        transcript.tool(payload.call_id, { name: payload.name, summary: '等待子任务', stats: { other: 1 } }, time)
+        transcript.tool(payload.call_id, { name: payload.name, kind: 'other', summary: '等待子任务', stats: { other: 1 } }, time)
       } else {
         transcript.tool(payload.call_id, describeTool(payload.name, args), time)
       }
@@ -372,12 +389,12 @@ export function readCodex(records, { includeMemory = false } = {}) {
       transcript.result(payload.call_id, textOf(payload.output), time, imagesOf(payload.output))
     } else if (payload.type === 'web_search_call') {
       const query = payload.action?.query || payload.action?.queries?.join('、') || ''
-      transcript.tool(null, { name: 'web_search', summary: `搜索「${query}」`, stats: { search: 1 } }, time)
+      transcript.tool(null, { name: 'web_search', kind: 'search', summary: `搜索「${query}」`, stats: { search: 1 } }, time)
     } else if (payload.type === 'agent_message') {
       const message = textOf(payload.content).match(/^Message Type: (\w+)\n[\s\S]*?Sender: ([^\n]+)\nPayload:\n([\s\S]*)$/)
       if (!message || !message[3].trim()) continue
       const name = normAgentName(message[2])
-      transcript.tool(null, { name: 'agent_message', summary: message[1] === 'FINAL_ANSWER' ? `子任务 ${name} 交回结果` : `子任务 ${name} 发来消息`, output: message[3].trim(), stats: { reply: 1 }, agent: name }, time)
+      transcript.tool(null, { name: 'agent_message', kind: 'reply', summary: message[1] === 'FINAL_ANSWER' ? `子任务 ${name} 交回结果` : `子任务 ${name} 发来消息`, output: message[3].trim(), stats: { reply: 1 }, agent: name }, time)
       if (message[1] === 'FINAL_ANSWER' && working.has(name)) {
         working.get(name).done = time
         working.delete(name)
