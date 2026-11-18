@@ -166,11 +166,10 @@ function formatLocalTime(ms) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-export async function scanRecentSessions({
-  limit = 12,
+export async function* iterateRecentSessions({
   codexDir = join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'sessions'),
   claudeDir = join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'projects'),
-} = {}) {
+} = {}, maxCandidates = Infinity) {
   const codexFiles = walkFiles(codexDir, name => name.startsWith('rollout-') && name.endsWith('.jsonl'))
     .map(item => ({ ...item, toolHint: 'codex' }))
   const claudeFiles = walkFiles(claudeDir, name => name.endsWith('.jsonl') && !name.startsWith('agent-'))
@@ -178,13 +177,18 @@ export async function scanRecentSessions({
 
   const candidates = [...codexFiles, ...claudeFiles]
     .sort((a, b) => b.mtimeMs - a.mtimeMs)
-    .slice(0, limit * 3)
+    .slice(0, maxCandidates)
 
-  const results = []
   for (const cand of candidates) {
-    const info = await summarizeLogFile(cand.file, cand.toolHint)
+    let info
+    try {
+      info = await summarizeLogFile(cand.file, cand.toolHint)
+    } catch (error) {
+      if (error.code === 'ENOENT') continue
+      throw error
+    }
     if (!info.preview) continue
-    results.push({
+    yield {
       tool: info.tool,
       toolLabel: tools[info.tool] || info.tool,
       file: cand.file,
@@ -192,7 +196,14 @@ export async function scanRecentSessions({
       timeLabel: formatLocalTime(cand.mtimeMs),
       sizeKB: Math.max(1, Math.round(cand.size / 1024)),
       preview: info.preview,
-    })
+    }
+  }
+}
+
+export async function scanRecentSessions({ limit = 12, ...directories } = {}) {
+  const results = []
+  for await (const session of iterateRecentSessions(directories, limit * 3)) {
+    results.push(session)
     if (results.length >= limit) break
   }
   return results

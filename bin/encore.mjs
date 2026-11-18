@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs'
+import { on } from 'node:events'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import readline from 'node:readline'
+import { iterateRecentSessions } from '../src/detect.mjs'
 import {
   buildReplay,
   rebuildReplayDir,
@@ -83,8 +85,14 @@ function truncateToColumns(str, maxCols) {
   return out
 }
 
-async function pickRecentSessionInteractive(sessions) {
+async function pickRecentSessionInteractive() {
+  const pageSize = 10
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    const sessions = await scanRecentSessions({ limit: pageSize })
+    if (!sessions.length) {
+      console.log(HELP)
+      return null
+    }
     console.log('Recent local AI Agent sessions:\n')
     sessions.forEach((s, idx) => {
       console.log(`  [${idx + 1}] ${s.timeLabel} · ${s.toolLabel.padEnd(11)} · ${s.preview}`)
@@ -94,67 +102,85 @@ async function pickRecentSessionInteractive(sessions) {
     return null
   }
 
-  return new Promise(resolvePromise => {
-    let selected = 0
-    const total = sessions.length
+  const history = iterateRecentSessions()
+  const sessions = []
+  let exhausted = false
+  let selected = 0
+  let renderedLines = 0
 
-    const renderMenu = (firstRender = false) => {
-      if (!firstRender) {
-        readline.moveCursor(process.stdout, 0, -(total + 3))
-        readline.clearScreenDown(process.stdout)
-      }
-      const cols = Math.max(40, (process.stdout.columns || 80) - 2)
-      process.stdout.write(`${truncateToColumns('🎭 Pick a recent AI Agent session to bring back on stage (↑/↓ to move, Enter to select, q to quit):', cols)}\n\n`)
-      sessions.forEach((s, idx) => {
-        const active = idx === selected
-        const prefix = active ? ' ❯ ' : '   '
-        const num = String(idx + 1).padStart(2, ' ')
-        const badge = `[${s.toolLabel}]`.padEnd(13, ' ')
-        const line = truncateToColumns(`${prefix}${num}. ${s.timeLabel}  ${badge} ${s.preview} (${s.sizeKB} KB)`, cols)
-        process.stdout.write(`${active ? `\x1b[36m\x1b[1m${line}\x1b[0m` : line}\n`)
-      })
-      process.stdout.write('\n')
+  async function loadPage(start) {
+    while (!exhausted && sessions.length <= start + pageSize) {
+      const next = await history.next()
+      if (next.done) exhausted = true
+      else sessions.push(next.value)
     }
+  }
 
-    renderMenu(true)
-    readline.emitKeypressEvents(process.stdin)
-    const wasRaw = process.stdin.isRaw
-    process.stdin.setRawMode(true)
-    process.stdin.resume()
+  await loadPage(0)
+  if (!sessions.length) {
+    console.log(HELP)
+    return null
+  }
 
-    const cleanup = () => {
-      process.stdin.removeListener('keypress', onKeypress)
-      if (process.stdin.isTTY) process.stdin.setRawMode(Boolean(wasRaw))
-      process.stdin.pause()
+  function renderMenu(start) {
+    if (renderedLines) {
+      readline.moveCursor(process.stdout, 0, -renderedLines)
+      readline.clearScreenDown(process.stdout)
     }
+    const cols = Math.max(1, (process.stdout.columns || 80) - 2)
+    const page = sessions.slice(start, start + pageSize)
+    const last = exhausted && start + pageSize >= sessions.length
+    const heading = `Page ${start / pageSize + 1}${last ? ' (last)' : ''} · ←/→ page · ↑/↓ move · Enter select · q quit`
+    process.stdout.write(`${truncateToColumns(heading, cols)}\n\n`)
+    page.forEach((session, index) => {
+      const active = start + index === selected
+      const prefix = active ? ' ❯ ' : '   '
+      const num = String(index + 1).padStart(2, ' ')
+      const badge = `[${session.toolLabel}]`.padEnd(13, ' ')
+      const line = truncateToColumns(`${prefix}${num}. ${session.timeLabel}  ${badge} ${session.preview} (${session.sizeKB} KB)`, cols)
+      process.stdout.write(`${active ? `\x1b[36m\x1b[1m${line}\x1b[0m` : line}\n`)
+    })
+    process.stdout.write('\n')
+    renderedLines = page.length + 3
+  }
 
-    const onKeypress = (str, key) => {
-      if (!key) return
+  readline.emitKeypressEvents(process.stdin)
+  const wasRaw = process.stdin.isRaw
+  process.stdin.setRawMode(true)
+  try {
+    let start = 0
+    renderMenu(start)
+    for await (const [str, key] of on(process.stdin, 'keypress')) {
       if (key.name === 'q' || key.name === 'escape' || (key.ctrl && key.name === 'c')) {
-        cleanup()
-        resolvePromise(null)
-        return
+        return null
       }
-      if (key.name === 'up' || key.name === 'k') {
-        selected = (selected - 1 + total) % total
-        renderMenu(false)
+      if (key.name === 'return' || key.name === 'enter') return sessions[selected]
+      if (key.name === 'left' || key.name === 'pageup') {
+        if (!start) continue
+        selected = start - pageSize
+      } else if (key.name === 'right' || key.name === 'pagedown') {
+        if (start + pageSize >= sessions.length) continue
+        selected = start + pageSize
+      } else if (key.name === 'up' || key.name === 'k') {
+        selected = Math.max(0, selected - 1)
       } else if (key.name === 'down' || key.name === 'j') {
-        selected = (selected + 1) % total
-        renderMenu(false)
-      } else if (key.name === 'return' || key.name === 'enter') {
-        cleanup()
-        resolvePromise(sessions[selected])
-      } else if (str && /^[1-9]$/.test(str)) {
-        const idx = Number(str) - 1
-        if (idx < total) {
-          selected = idx
-          renderMenu(false)
-        }
+        selected = Math.min(sessions.length - 1, selected + 1)
+      } else if (/^\d$/.test(str)) {
+        const index = start + (Number(str) || pageSize) - 1
+        if (index >= sessions.length) continue
+        selected = index
+      } else {
+        continue
       }
+      start = Math.floor(selected / pageSize) * pageSize
+      await loadPage(start)
+      renderMenu(start)
     }
-
-    process.stdin.on('keypress', onKeypress)
-  })
+  } finally {
+    process.stdin.setRawMode(Boolean(wasRaw))
+    process.stdin.pause()
+    await history.return()
+  }
 }
 
 async function main() {
@@ -240,12 +266,7 @@ async function main() {
   }
 
   if (!targets.length) {
-    const recent = await scanRecentSessions({ limit: 10 })
-    if (!recent.length) {
-      console.log(HELP)
-      return
-    }
-    const picked = await pickRecentSessionInteractive(recent)
+    const picked = await pickRecentSessionInteractive()
     if (!picked) return
     targets = [picked.file]
     explicitTool = picked.tool
