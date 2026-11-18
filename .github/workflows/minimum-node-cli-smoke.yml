@@ -1,0 +1,49 @@
+name: Minimum Node CLI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Minimum Node CLI smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.10.0'
+
+      - name: Pack and install under the declared minimum Node version
+        run: |
+          node -e "require('node:assert/strict').equal(require('./package.json').engines.node, '>=' + process.versions.node)"
+          mkdir "$RUNNER_TEMP/encore-consumer"
+          npm pack --pack-destination "$RUNNER_TEMP/encore-consumer"
+          cd "$RUNNER_TEMP/encore-consumer"
+          echo '{"name":"encore-consumer","private":true}' > package.json
+          npm install --engine-strict --omit=dev --no-audit --no-fund ./*.tgz
+
+      - name: Export the sample and decode its screenshot
+        working-directory: ${{ runner.temp }}/encore-consumer
+        run: |
+          ./node_modules/.bin/encore "$GITHUB_WORKSPACE/test/fixtures/windows-smoke.jsonl" -o replay --no-serve
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict'
+          import { readFile } from 'node:fs/promises'
+          import { join } from 'node:path'
+          import sharp from 'sharp'
+
+          const session = JSON.parse(await readFile('replay/session.json', 'utf8'))
+          assert.ok(session.items.some(item => item.type === 'user' && item.text.includes('请显示这张样例截图。')))
+          assert.equal(session.frames?.length, 1, 'Expected one exported screenshot')
+          const screenshot = sharp(join('replay', session.frames[0].img))
+          assert.equal((await screenshot.metadata()).format, 'webp')
+          const { info } = await screenshot.raw().toBuffer({ resolveWithObject: true })
+          assert.deepEqual([info.width, info.height], [32, 24])
+          JS
