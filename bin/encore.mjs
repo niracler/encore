@@ -19,7 +19,7 @@ const HELP = `
 encore (@niracler/encore) — Bring your AI agent sessions back on stage.
 
 Usage:
-  encore                              Scan recent Codex & Claude Code sessions and pick one interactively
+  encore                              Scan recent Codex, Claude Code & WorkBuddy sessions and pick one interactively
   encore <log.jsonl | dir> [options]  Build a standalone replay directory from a log or re-render an edited session.json
   encore play <dir> [--port 4180]     Start local preview server for an existing replay directory
 
@@ -244,7 +244,7 @@ async function main() {
   if (values.list) {
     const recent = await scanRecentSessions({ limit: 15 })
     if (!recent.length) {
-      console.log('No recent Codex or Claude Code sessions found in ~/.codex/sessions or ~/.claude/projects.')
+      console.log('No recent Codex, Claude Code, or WorkBuddy sessions found in ~/.codex/sessions, ~/.claude/projects, or ~/.workbuddy/projects.')
       return
     }
     console.log('Recent local AI Agent sessions:\n')
@@ -260,7 +260,7 @@ async function main() {
     targets = targets.slice(1)
   }
   let explicitTool
-  if (['codex', 'claude-code', 'claude-ai'].includes(targets[0]) && targets.length > 1) {
+  if (['codex', 'claude-code', 'claude-ai', 'workbuddy'].includes(targets[0]) && targets.length > 1) {
     explicitTool = targets[0]
     targets = targets.slice(1)
   }

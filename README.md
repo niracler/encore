@@ -1,7 +1,7 @@
 # Encore
 
 **Bring your AI agent sessions back on stage.**
-*Like [`asciinema`](https://asciinema.org), but for AI Agent sessions (`Codex`, `Claude Code`, `Claude.ai`).*
+*Like [`asciinema`](https://asciinema.org), but for AI Agent sessions (`Codex`, `Claude Code`, `Claude.ai`, `WorkBuddy`).*
 
 [English](./README.md) · [简体中文](./README.zh-CN.md)
 
@@ -13,7 +13,7 @@
 
 Screen recordings of AI coding or design sessions are blurry, bulky, and unsearchable. Plain Markdown chat exports strip away everything that actually matters in an agentic workflow: **what was inside the context window, which tools and sub-agents ran, how visual artifacts evolved step by step, and when context compaction fired.**
 
-**Encore** turns raw session logs from **OpenAI Codex**, **Claude Code**, and **Claude.ai** into an interactive, self-contained web stage:
+**Encore** turns raw session logs from **OpenAI Codex**, **Claude Code**, **Claude.ai**, and **WorkBuddy** into an interactive, self-contained web stage:
 
 | Stage Area | What It Shows |
 | :--- | :--- |
@@ -34,7 +34,7 @@ Encore separates data, player, and CLI into three clean layers:
    <div data-encore-player src="./session.json" data-lang="en"></div>
    <script src="./encore-player.js" defer></script>
    ```
-3. **CLI (`encore`)**: Auto-detects `Codex`, `Claude Code`, and `Claude.ai` logs, extracts embedded images into `.webp`, redacts local paths & secrets, writes the static replay folder, and serves a live local preview.
+3. **CLI (`encore`)**: Auto-detects `Codex`, `Claude Code`, `Claude.ai`, and `WorkBuddy` logs, extracts embedded images into `.webp`, redacts local paths & secrets, writes the static replay folder, and serves a live local preview.
 
 ---
 
@@ -42,7 +42,7 @@ Encore separates data, player, and CLI into three clean layers:
 
 ### 1. Pick from your recent local sessions
 
-Run `encore` with no arguments to scan `~/.codex/sessions` and `~/.claude/projects` and pick a recent session with `↑` / `↓`:
+Run `encore` with no arguments to scan `~/.codex/sessions`, `~/.claude/projects`, and `~/.workbuddy/projects`, and pick a recent session with `↑` / `↓`:
 
 ```bash
 npx @niracler/encore
@@ -128,7 +128,7 @@ The skill guides the agent through four curation steps:
 
 ```text
 Usage:
-  encore                              Scan recent Codex & Claude Code sessions and pick one interactively
+  encore                              Scan recent Codex, Claude Code & WorkBuddy sessions and pick one interactively
   encore <log.jsonl | dir> [options]  Build a standalone replay directory from a log or re-render an edited session.json
   encore play <dir> [--port 4180]     Start local preview server for an existing replay directory
 

@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path'
 import { cleanPrompt } from './codex.mjs'
 import { userText } from './claude-code.mjs'
 import { lines, textOf, tools } from './common.mjs'
+import { workBuddyUserText } from './workbuddy.mjs'
 
 const codexInjected = /^(# AGENTS\.md instructions|<[a-z][\w-]*[\s>]|The following is the Codex agent history)/
 
@@ -49,6 +50,15 @@ export async function detectJsonlTool(filePath) {
       const rec = JSON.parse(trimmed)
       if (rec.type === 'session_meta' || rec.type === 'turn_context' || rec.type === 'response_item' || rec.type === 'event_msg') {
         return 'codex'
+      }
+      if (
+        rec.type === 'ai-title' ||
+        rec.providerData ||
+        rec.type === 'function_call_result' ||
+        (rec.type === 'message' && typeof rec.role === 'string' && !rec.payload) ||
+        (rec.type === 'function_call' && rec.callId && !rec.payload)
+      ) {
+        return 'workbuddy'
       }
       if (
         rec.type === 'api-request-shape' ||
@@ -122,6 +132,7 @@ async function summarizeLogFile(file, toolHint) {
       timestamp = typeof rec.timestamp === 'number' ? new Date(rec.timestamp).toISOString() : String(rec.timestamp)
     }
     if (rec.type === 'session_meta' || rec.type === 'response_item') tool = 'codex'
+    if (rec.type === 'ai-title' || rec.providerData || rec.type === 'function_call_result') tool = 'workbuddy'
     if (rec.type === 'custom-title' && rec.customTitle) title = rec.customTitle
     if (rec.type === 'ai-title' && rec.aiTitle && !title) title = rec.aiTitle
     if (rec.type === 'summary' && rec.summary && !title) title = rec.summary
@@ -134,6 +145,10 @@ async function summarizeLogFile(file, toolHint) {
         if (raw && !codexInjected.test(raw) && !raw.startsWith('<send_user_message_question_reply>')) {
           firstPrompt = cleanPrompt(raw)
         }
+      } else if (rec.type === 'message' && rec.role === 'user' && !rec.payload) {
+        tool = 'workbuddy'
+        const txt = workBuddyUserText(rec.content).trim()
+        if (txt) firstPrompt = txt
       } else if (rec.type === 'user' && !rec.isMeta && !rec.isCompactSummary && rec.message) {
         tool = 'claude-code'
         const blocks = typeof rec.message.content === 'string'
@@ -169,13 +184,16 @@ function formatLocalTime(ms) {
 export async function* iterateRecentSessions({
   codexDir = join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'sessions'),
   claudeDir = join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'projects'),
+  workbuddyDir = join(process.env.WORKBUDDY_HOME || join(homedir(), '.workbuddy'), 'projects'),
 } = {}, maxCandidates = Infinity) {
   const codexFiles = walkFiles(codexDir, name => name.startsWith('rollout-') && name.endsWith('.jsonl'))
     .map(item => ({ ...item, toolHint: 'codex' }))
   const claudeFiles = walkFiles(claudeDir, name => name.endsWith('.jsonl') && !name.startsWith('agent-'))
     .map(item => ({ ...item, toolHint: 'claude-code' }))
+  const workbuddyFiles = walkFiles(workbuddyDir, name => name.endsWith('.jsonl'))
+    .map(item => ({ ...item, toolHint: 'workbuddy' }))
 
-  const candidates = [...codexFiles, ...claudeFiles]
+  const candidates = [...codexFiles, ...claudeFiles, ...workbuddyFiles]
     .sort((a, b) => b.mtimeMs - a.mtimeMs)
     .slice(0, maxCandidates)
 

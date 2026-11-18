@@ -614,6 +614,28 @@ function defaultSystemPrompts(toolName) {
       },
     ]
   }
+  if (toolName === 'workbuddy') {
+    return [
+      {
+        id: 'sys-core',
+        stepIndex: -1,
+        tokEst: 3200,
+        tag: 'Core',
+        title: 'WorkBuddy Desktop Agent · Core Role & Execution Rules',
+        meta: '≈3.2k · Initial',
+        payload: `You are WorkBuddy, a desktop agent bound to the active local workspace directory.\n\n# Core Responsibilities\n1. Search and read workspace documents, spreadsheets, PDFs, and images on demand; ground answers in primary sources.\n2. Decompose complex research into parallel sub-tasks and synthesize verified deliverables.\n3. Confirm with the user before overwriting formal documents or sending external messages.`,
+      },
+      {
+        id: 'sys-workspace',
+        stepIndex: -1,
+        tokEst: 1800,
+        tag: 'Workspace',
+        title: 'Workspace File I/O & Deliverable Conventions',
+        meta: '≈1.8k · Initial',
+        payload: `# Workspace Conventions\n- Inspect directory structure and project notes before modifying files.\n- Save intermediate drafts, tables, and final reports under the designated workspace path.`,
+      },
+    ]
+  }
   return [
     {
       id: 'sys-core',
@@ -643,6 +665,14 @@ function defaultToolSchemas(toolName) {
       { id: 'schema-read-edit', stepIndex: -1, tokEst: 2400, tag: 'Schema', title: 'Read / Edit / Write · File Operations', meta: '≈2.4k · Schema', payload: '{\n  "tools": ["Read", "Edit", "Write"]\n}' },
       { id: 'schema-search', stepIndex: -1, tokEst: 1900, tag: 'Schema', title: 'Grep / Glob / WebSearch · Search & Discovery', meta: '≈1.9k · Schema', payload: '{\n  "tools": ["Grep", "Glob", "WebSearch", "WebFetch"]\n}' },
       { id: 'schema-agent-skill', stepIndex: -1, tokEst: 2000, tag: 'Schema', title: 'Agent / Skill / TodoWrite · Delegation & Skills', meta: '≈2.0k · Schema', payload: '{\n  "tools": ["Agent", "Skill", "TodoWrite"]\n}' },
+    ]
+  }
+  if (toolName === 'workbuddy') {
+    return [
+      { id: 'schema-wb-read', stepIndex: -1, tokEst: 1800, tag: 'Schema', title: 'read_file / list_dir · Workspace Document Reader', meta: '≈1.8k · Schema', payload: '{\n  "tools": ["read_file", "list_dir"]\n}' },
+      { id: 'schema-wb-write', stepIndex: -1, tokEst: 1900, tag: 'Schema', title: 'write_file / edit_file · Deliverable & Note Writer', meta: '≈1.9k · Schema', payload: '{\n  "tools": ["write_file", "edit_file"]\n}' },
+      { id: 'schema-wb-web', stepIndex: -1, tokEst: 2000, tag: 'Schema', title: 'web_search / run_command · Web Research & Scripts', meta: '≈2.0k · Schema', payload: '{\n  "tools": ["web_search", "run_command"]\n}' },
+      { id: 'schema-wb-agent', stepIndex: -1, tokEst: 2100, tag: 'Schema', title: 'Agent · Parallel Research Sub-tasks', meta: '≈2.1k · Schema', payload: '{\n  "tools": ["Agent"]\n}' },
     ]
   }
   return [
@@ -1502,6 +1532,7 @@ const escape = escapeHtml
 
 const toolLabels = {
   codex: 'Codex',
+  workbuddy: 'WorkBuddy',
   'claude-code': 'Claude Code',
   'claude-ai': 'Claude',
 }
@@ -2000,7 +2031,13 @@ function buildPlayerData(session, line, { baseUrl = '' } = {}) {
   }
 }
 
-function renderPlayerWidget(session, computedTimeline, { lang = 'zh', baseUrl = '' } = {}) {
+function renderPlayerWidget(session, computedTimeline, {
+  lang = 'zh',
+  baseUrl = '',
+  backHref = '',
+  backLabel = '',
+  showLangToggle = !backHref,
+} = {}) {
   const t = createTranslator(lang || session.lang || 'zh')
   const line = computedTimeline || timeline(session, { lang: t.lang })
   const tool = toolLabels[session.tool] || session.tool || 'Agent'
@@ -2011,18 +2048,24 @@ function renderPlayerWidget(session, computedTimeline, { lang = 'zh', baseUrl = 
   const firstPromptDraft = rawFirstPrompt && rawFirstPrompt !== '（中途打断）' ? rawFirstPrompt : ''
   const hasInitialDraft = Boolean(firstPromptDraft)
   const dataJson = JSON.stringify(buildPlayerData(session, line, { baseUrl })).replace(/</g, '\\u003c')
+  const leadBadge = backHref && backLabel
+    ? `<a class="session-back" href="${escape(backHref)}">${escape(backLabel)}</a>`
+    : `<span class="encore-brand-badge" aria-hidden="true">ENCORE</span>`
+  const rightControls = showLangToggle
+    ? `<div class="session-topbar-right">
+        <button type="button" class="encore-lang-btn" data-encore-lang-toggle title="${escape(t('toggleLangTitle'))}">${escape(t('toggleLangLabel'))}</button>
+      </div>`
+    : ''
 
   return `<div class="session-app" data-encore-lang="${escape(t.lang)}">
     <header class="session-topbar">
       <div class="session-topbar-left">
-        <span class="encore-brand-badge" aria-hidden="true">ENCORE</span>
+        ${leadBadge}
         <span class="session-topbar-sep" aria-hidden="true">/</span>
         <h1 class="session-title">${escape(title)}</h1>
         <span class="session-model-pill">${escape(tool)}${session.model ? ` · ${escape(session.model)}` : ''}</span>
       </div>
-      <div class="session-topbar-right">
-        <button type="button" class="encore-lang-btn" data-encore-lang-toggle title="${escape(t('toggleLangTitle'))}">${escape(t('toggleLangLabel'))}</button>
-      </div>
+      ${rightControls}
     </header>
     <section class="session-player" aria-label="${escape(t('tlAria'))}" hidden>
       ${scrubber(line)}
@@ -3303,6 +3346,24 @@ async function createEncorePlayer(targetEl, sourceOrSession, options = {}) {
   if (!session && el.getAttribute('src')) {
     sourceOrSession = el.getAttribute('src')
   }
+  const preRenderedData = !session && !sourceOrSession
+    ? el.querySelector('[data-encore-session-data], #session-data')
+    : null
+  if (preRenderedData) {
+    document.documentElement.classList.add('js-session')
+    el.classList.add('session-wrap')
+    const appNode = el.querySelector('.session-app')
+    const activeLang = resolveLang(options.lang || el.dataset.lang || appNode?.dataset.encoreLang || 'zh')
+    const playerData = JSON.parse(preRenderedData.textContent)
+    const activeController = attachPlayerController(el, playerData, {
+      lang: activeLang,
+      initialStep: options.initialStep ?? -1,
+    })
+    return {
+      setLang: () => {},
+      getController: () => activeController,
+    }
+  }
   if (typeof sourceOrSession === 'string') {
     const srcUrl = sourceOrSession
     if (!baseUrl) {
@@ -3371,8 +3432,10 @@ async function autoMountEncorePlayers() {
 }
 
 if (typeof globalThis !== 'undefined') {
+  globalThis.createSessionPlaybackModel = createSessionPlaybackModel
   globalThis.EncorePlayer = {
     create: createEncorePlayer,
+    attach: attachPlayerController,
     mountAll: autoMountEncorePlayers,
     createSessionPlaybackModel,
   }

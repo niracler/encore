@@ -4,6 +4,7 @@ import { StringDecoder } from 'node:string_decoder'
 
 export const tools = {
   codex: 'Codex',
+  workbuddy: 'WorkBuddy',
   'claude-code': 'Claude Code',
   'claude-ai': 'Claude',
 }
@@ -202,21 +203,30 @@ export function describeTool(name, input = {}) {
   const args = typeof input === 'object' && input !== null ? input : {}
   const base = String(name).split('__').pop()
   const kind = toolKinds[name] || toolKinds[base] || 'other'
-  const patchMatch = typeof input === 'string'
-    ? input.match(/\*\*\* (?:Add|Update|Delete) File:\s*([^\n\r]+)/)?.[1]?.trim()
-    : (typeof args.input === 'string' ? args.input.match(/\*\*\* (?:Add|Update|Delete) File:\s*([^\n\r]+)/)?.[1]?.trim() : undefined)
+  const patchText = typeof input === 'string' ? input : (typeof args.input === 'string' ? args.input : '')
+  const patchFiles = [...patchText.matchAll(/\*\*\* (?:Add|Update|Delete) File:\s*([^\n\r\\"]+)/g)]
+    .map(match => fileName(match[1].trim()))
+    .filter(Boolean)
+  const patchMatch = patchFiles[0]
   const path = args.file_path || args.path || args.notebook_path || patchMatch
+  const file = fileName(path) || undefined
+  const files = patchFiles.length > 1 ? [...new Set(patchFiles)] : undefined
   const cmdText = args.command || args.cmd
+  const cmdLine = Array.isArray(cmdText) ? cmdText.join(' ') : cmdText
+  const rawSkill = kind === 'skill'
+    ? String(args.skill || args.name || '').trim()
+    : (String(path || cmdLine || '').match(/(?:^|[/\\])skills[/\\]([\w-]+)[/\\]SKILL\.md\b/)?.[1] || '')
+  const skill = rawSkill || undefined
   const summary = {
     search: () => `搜索「${oneLine(args.query || args.q, 60)}」`,
     open: () => `打开 ${shortUrl(args.url || args.ref_id)}`,
-    command: () => `运行 ${oneLine(Array.isArray(cmdText) ? cmdText.join(' ') : cmdText)}`,
-    read: () => `读取 ${fileName(path)}`,
-    view: () => `查看 ${fileName(path) || '图片'}`,
+    command: () => `运行 ${oneLine(cmdLine)}`,
+    read: () => `读取 ${file || ''}`.trim(),
+    view: () => `查看 ${file || '图片'}`,
     find: () => `查找 ${oneLine(args.pattern || path, 60)}`,
-    edit: () => `${/^(Write|create_file|write_file)$/.test(base) ? '写入' : '修改'} ${fileName(path)}`,
+    edit: () => `${/^(Write|create_file|write_file)$/.test(base) ? '写入' : '修改'} ${file || ''}`.trim(),
     agent: () => `派出子任务：${oneLine(args.description || args.prompt || args.task_name, 40)}`,
-    skill: () => `加载技能 ${args.skill || args.name || ''}`.trim(),
+    skill: () => `加载技能 ${skill || ''}`.trim(),
     other: () => (
       typeof args.title === 'string' && typeof args.code === 'string'
         ? oneLine(args.title, 80)
@@ -224,14 +234,14 @@ export function describeTool(name, input = {}) {
     ),
   }[kind]()
   const shown = kind === 'command'
-    ? (Array.isArray(cmdText) ? cmdText.join(' ') : cmdText)
+    ? cmdLine
     : kind === 'agent'
       ? (args.prompt || args.message)
       : kind === 'edit' && typeof (args.content || args.input) === 'string'
         ? (args.content || args.input)
         : input
   const agent = kind === 'agent' ? oneLine(args.description || args.prompt || args.task_name, 40) : undefined
-  return { name, summary, input: inputText(shown), stats: { [kind]: 1 }, agent }
+  return { name, kind, summary, input: inputText(shown), stats: { [kind]: 1 }, file, files, skill, agent }
 }
 
 export function deriveDefaultTitle(session) {

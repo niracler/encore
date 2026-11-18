@@ -1,7 +1,7 @@
 {
   "name": "@niracler/encore",
   "version": "0.1.0",
-  "description": "Bring your AI agent sessions back on stage — like asciinema, but for AI agents (Codex, Claude Code, Claude).",
+  "description": "Bring your AI agent sessions back on stage — like asciinema, but for AI agents (Codex, Claude Code, Claude, WorkBuddy).",
   "type": "module",
   "repository": {
     "type": "git",
@@ -40,6 +40,7 @@
     "session-player",
     "codex",
     "claude-code",
+    "workbuddy",
     "context-engineering",
     "asciinema"
   ],
