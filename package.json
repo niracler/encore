@@ -1,7 +1,7 @@
 {
   "name": "@niracler/encore",
   "version": "0.1.0",
-  "description": "Bring your AI agent sessions back on stage — like asciinema, but for AI agents (Codex, Claude Code, Claude).",
+  "description": "A curtain call for your AI agent runs. Replay Codex, Claude Code, Claude.ai, and WorkBuddy sessions as an interactive web stage with a live context-window inspector.",
   "type": "module",
   "repository": {
     "type": "git",
