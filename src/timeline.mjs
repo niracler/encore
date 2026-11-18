@@ -32,13 +32,21 @@ function resolveWindowCapacity(tool = 'codex', model = '', contextWindow = 0) {
   return { tokens: 200000, label: '200k' }
 }
 
-export function kindOf(stats = {}) {
+export function kindOf(stats = {}, fallbackKind = '') {
+  if (fallbackKind && kinds[fallbackKind]) return kinds[fallbackKind]
   const found = Object.keys(stats).map(key => kinds[key] || 'make')
   return order.find(kind => found.includes(kind)) || 'make'
 }
 
 function extractSkillNames(item, knownSkills = new Set()) {
   const names = new Set()
+  if (typeof item.skill === 'string' && item.skill.trim()) {
+    names.add(item.skill.trim())
+  } else if (Array.isArray(item.skill)) {
+    for (const entry of item.skill) {
+      if (typeof entry === 'string' && entry.trim()) names.add(entry.trim())
+    }
+  }
   const text = `${item.text || ''}\n${item.summary || ''}\n${item.input || ''}`
   const known = new Set([
     ...knownSkills,
@@ -59,31 +67,37 @@ function extractFileChips(work) {
   const tools = []
   const changes = []
   const memories = []
+  const pushTarget = (rawTarget, isEdit) => {
+    const target = String(rawTarget || '').trim().split(/[/\\]/).pop()
+    if (!target) return
+    if (/AGENTS\.md|CLAUDE\.md|memory/i.test(target)) memories.push(target)
+    else tools.push(target)
+    if (isEdit) changes.push(target)
+  }
   for (const item of work) {
+    const isEdit = Boolean(item.kind === 'edit' || item.stats?.edit)
+    const explicitFiles = [
+      ...(typeof item.file === 'string' && item.file.trim() ? [item.file.trim()] : []),
+      ...(Array.isArray(item.files) ? item.files : []),
+    ]
     const summary = String(item.summary || '')
     const input = String(item.input || '')
-    for (const match of summary.matchAll(/(?:读取|写入|修改|查看)\s+([^\s，；,]+)/g)) {
-      const target = match[1].trim()
-      if (!target) continue
-      if (/AGENTS\.md|CLAUDE\.md|memory/i.test(target)) memories.push(target)
-      else tools.push(target)
-      if (summary.startsWith('写入') || summary.startsWith('修改')) changes.push(target)
-    }
-    for (const match of input.matchAll(/\*\*\* (?:Add|Update|Delete) File: ([^\n\\"]+)/g)) {
-      const name = match[1].trim().split('/').pop()
-      if (name) {
-        tools.push(name)
-        changes.push(name)
+    if (explicitFiles.length) {
+      for (const f of [...new Set(explicitFiles)]) pushTarget(f, isEdit)
+    } else {
+      for (const match of summary.matchAll(/(?:读取|写入|修改|查看)\s+([^\s，；,]+)/g)) {
+        pushTarget(match[1], summary.startsWith('写入') || summary.startsWith('修改') || isEdit)
+      }
+      for (const match of input.matchAll(/\*\*\* (?:Add|Update|Delete) File: ([^\n\\"]+)/g)) {
+        pushTarget(match[1], true)
+      }
+      for (const match of input.matchAll(/"(?:file_path|path)"\s*:\s*"([^"]+)"/g)) {
+        pushTarget(match[1], isEdit)
       }
     }
-    for (const match of input.matchAll(/"(?:file_path|path)"\s*:\s*"([^"]+)"/g)) {
-      const name = match[1].trim().split('/').pop()
-      if (!name) continue
-      if (/AGENTS\.md|CLAUDE\.md|memory/i.test(name)) memories.push(name)
-      else tools.push(name)
-      if (item.stats?.edit) changes.push(name)
-    }
-    if (!tools.length && summary) tools.push(summary.slice(0, 28))
+  }
+  if (!tools.length && work[0]?.summary) {
+    tools.push(String(work[0].summary).slice(0, 28))
   }
   return { tools, changes, memories }
 }
@@ -92,7 +106,13 @@ function extractStepDocs(toolItems, stepIndex) {
   const byFile = new Map()
   toolItems.forEach((item, idx) => {
     if (!item.input) return
-    const m = String(item.summary || '').match(/^(?:写入|修改|Write|Edit)\s+([^\s、,]+\.md)(?:\s|$)/i)
+    const isEdit = Boolean(item.kind === 'edit' || item.stats?.edit)
+    const explicitMd = isEdit && typeof item.file === 'string' && /\.md$/i.test(item.file.trim())
+      ? item.file.trim().split(/[/\\]/).pop()
+      : ''
+    const m = explicitMd
+      ? [null, explicitMd]
+      : String(item.summary || '').match(/^(?:写入|修改|Write|Edit)\s+([^\s、,]+\.md)(?:\s|$)/i)
     if (!m) return
     const file = m[1]
     if (file.startsWith('_') || /^\d{4}-\d{2}-\d{2}\.md$/.test(file)) return
@@ -131,11 +151,12 @@ function extractStepSubagents(toolItems, stepIndex) {
   toolItems.forEach((item, idx) => {
     const rawSum = String(item.summary || '')
     const isSub = Boolean(
+      item.kind === 'agent' ||
       item.stats?.agent ||
       item.agent ||
       item.name === 'agent_message' ||
       item.name === 'agent-message' ||
-      (item.stats?.reply && /Agent\s+"|^子任务/.test(rawSum) && !/Background command/i.test(rawSum))
+      ((item.kind === 'reply' || item.stats?.reply) && /Agent\s+"|^子任务/.test(rawSum) && !/Background command/i.test(rawSum))
     )
     if (!isSub) return
     const label = (
@@ -146,7 +167,8 @@ function extractStepSubagents(toolItems, stepIndex) {
         .replace(/\s+交回结果$/, '')
         .trim()
     )
-    if (!label || /^给子任务发消息/.test(rawSum)) return
+    const isSendMsg = /^(?:send_message|collaboration__send_message)$/.test(item.name || '')
+    if (!label || isSendMsg || /^给子任务发消息/.test(rawSum)) return
     const combined = `${rawSum}\n${item.output || ''}`
     const isAsyncSpawn = /^(?:spawn_agent|collaboration__spawn_agent|followup_task|collaboration__followup_task)$/.test(item.name || '')
     let state = 'sent'
@@ -158,7 +180,7 @@ function extractStepSubagents(toolItems, stepIndex) {
     } else if (/failed:|terminated early|rate_limit|hit your session limit|^Error:\s*Failed/im.test(combined)) {
       state = 'failed'
       badge = /limit|429/i.test(combined) ? '额度中断' : '失败'
-    } else if (item.stats?.reply || (!isAsyncSpawn && item.output && item.output.length > 80 && !item.output.trim().startsWith('{'))) {
+    } else if (item.kind === 'reply' || item.stats?.reply || (!isAsyncSpawn && item.output && item.output.length > 80 && !item.output.trim().startsWith('{'))) {
       state = 'done'
       badge = '已交回'
       if (item.output && item.output.length > 40 && !item.output.trim().startsWith('{')) {
@@ -264,14 +286,6 @@ function defaultToolSchemas(toolName) {
       { id: 'schema-read-edit', stepIndex: -1, tokEst: 2400, tag: 'Schema', title: 'Read / Edit / Write · File Operations', meta: '≈2.4k · Schema', payload: '{\n  "tools": ["Read", "Edit", "Write"]\n}' },
       { id: 'schema-search', stepIndex: -1, tokEst: 1900, tag: 'Schema', title: 'Grep / Glob / WebSearch · Search & Discovery', meta: '≈1.9k · Schema', payload: '{\n  "tools": ["Grep", "Glob", "WebSearch", "WebFetch"]\n}' },
       { id: 'schema-agent-skill', stepIndex: -1, tokEst: 2000, tag: 'Schema', title: 'Agent / Skill / TodoWrite · Delegation & Skills', meta: '≈2.0k · Schema', payload: '{\n  "tools": ["Agent", "Skill", "TodoWrite"]\n}' },
-    ]
-  }
-  if (toolName === 'workbuddy') {
-    return [
-      { id: 'schema-wb-read', stepIndex: -1, tokEst: 1800, tag: 'Schema', title: 'read_file / list_dir · Workspace Document Reader', meta: '≈1.8k · Schema', payload: '{\n  "tools": ["read_file", "list_dir"]\n}' },
-      { id: 'schema-wb-write', stepIndex: -1, tokEst: 1900, tag: 'Schema', title: 'write_file / edit_file · Deliverable & Note Writer', meta: '≈1.9k · Schema', payload: '{\n  "tools": ["write_file", "edit_file"]\n}' },
-      { id: 'schema-wb-web', stepIndex: -1, tokEst: 2000, tag: 'Schema', title: 'web_search / run_command · Web Research & Scripts', meta: '≈2.0k · Schema', payload: '{\n  "tools": ["web_search", "run_command"]\n}' },
-      { id: 'schema-wb-agent', stepIndex: -1, tokEst: 2100, tag: 'Schema', title: 'Agent · Parallel Research Sub-tasks', meta: '≈2.1k · Schema', payload: '{\n  "tools": ["Agent"]\n}' },
     ]
   }
   return [
@@ -852,7 +866,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
           payload: parts.join('\n\n'),
           ...(item.images?.length ? { images: item.images } : {}),
         }))
-        const isSpot = Boolean(item.stats?.edit || item.stats?.skill)
+        const isSpot = Boolean(item.kind === 'edit' || item.kind === 'skill' || item.stats?.edit || item.stats?.skill)
         rawMontage.push({
           tag: toolTag,
           title: cleanSum.slice(0, 56),
@@ -1045,10 +1059,10 @@ export function timeline(session, { lang = 'zh' } = {}) {
     ...item,
     t: at(item.time),
     ...(item.done ? { d: Math.min(end, at(item.done)) } : {}),
-    ...(item.type === 'tool' ? { k: kindOf(item.stats) } : {}),
+    ...(item.type === 'tool' ? { k: kindOf(item.stats, item.kind) } : {}),
   }))
   const lanes = items
-    .filter(item => item.type === 'tool' && item.agent && item.d !== undefined && (item.stats?.agent || item.name === 'followup_task'))
+    .filter(item => item.type === 'tool' && item.agent && item.d !== undefined && (item.kind === 'agent' || item.stats?.agent || item.name === 'followup_task'))
     .map(item => ({ agent: item.agent, s: item.t, e: Math.max(item.t, item.d) }))
   const waits = []
   items.forEach((item, index) => {
@@ -1092,8 +1106,12 @@ export function timeline(session, { lang = 'zh' } = {}) {
 export function sumStats(items) {
   const totals = {}
   for (const item of items || []) {
-    for (const [key, value] of Object.entries(item.stats || {})) {
-      totals[key] = (totals[key] || 0) + value
+    if (item.stats && Object.keys(item.stats).length) {
+      for (const [key, value] of Object.entries(item.stats)) {
+        totals[key] = (totals[key] || 0) + value
+      }
+    } else if (item.kind) {
+      totals[item.kind] = (totals[item.kind] || 0) + 1
     }
   }
   return totals

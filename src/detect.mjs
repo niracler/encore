@@ -52,7 +52,6 @@ export async function detectJsonlTool(filePath) {
         return 'codex'
       }
       if (
-        rec.type === 'ai-title' ||
         rec.providerData ||
         rec.type === 'function_call_result' ||
         (rec.type === 'message' && typeof rec.role === 'string' && !rec.payload) ||
@@ -132,7 +131,7 @@ async function summarizeLogFile(file, toolHint) {
       timestamp = typeof rec.timestamp === 'number' ? new Date(rec.timestamp).toISOString() : String(rec.timestamp)
     }
     if (rec.type === 'session_meta' || rec.type === 'response_item') tool = 'codex'
-    if (rec.type === 'ai-title' || rec.providerData || rec.type === 'function_call_result') tool = 'workbuddy'
+    if (rec.providerData || rec.type === 'function_call_result') tool = 'workbuddy'
     if (rec.type === 'custom-title' && rec.customTitle) title = rec.customTitle
     if (rec.type === 'ai-title' && rec.aiTitle && !title) title = rec.aiTitle
     if (rec.type === 'summary' && rec.summary && !title) title = rec.summary

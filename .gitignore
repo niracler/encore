@@ -1,5 +1,6 @@
 node_modules/
 dist/
+player/encore-player.js
 replays/
 encore-out/
 .DS_Store

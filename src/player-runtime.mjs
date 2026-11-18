@@ -1236,6 +1236,7 @@ export async function createEncorePlayer(targetEl, sourceOrSession, options = {}
   if (preRenderedData) {
     document.documentElement.classList.add('js-session')
     el.classList.add('session-wrap')
+    el.querySelector('[data-encore-lang-toggle]')?.remove()
     const appNode = el.querySelector('.session-app')
     const activeLang = resolveLang(options.lang || el.dataset.lang || appNode?.dataset.encoreLang || 'zh')
     const playerData = JSON.parse(preRenderedData.textContent)

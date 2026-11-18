@@ -99,7 +99,7 @@ export function readClaudeCode(records, { includeMemory = false } = {}) {
       waiting.delete(from)
       return
     }
-    const item = transcript.tool(null, { name: 'task-notification', summary, output: from ? undefined : result, stats: { reply: 1 }, agent }, time)
+    const item = transcript.tool(null, { name: 'task-notification', kind: 'reply', summary, output: from ? undefined : result, stats: { reply: 1 }, agent }, time)
     if (from) waiting.set(from, item)
   }
   const reported = ({ from, report }, time) => {
@@ -108,7 +108,7 @@ export function readClaudeCode(records, { includeMemory = false } = {}) {
       waiting.delete(from)
       return
     }
-    waiting.set(from, transcript.tool(null, { name: 'agent-message', summary: `子任务交回结果：${from}`, output: report, stats: { reply: 1 } }, time))
+    waiting.set(from, transcript.tool(null, { name: 'agent-message', kind: 'reply', summary: `子任务交回结果：${from}`, output: report, stats: { reply: 1 }, agent: from }, time))
   }
 
   for (const record of records) {

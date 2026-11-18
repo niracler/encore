@@ -1,13 +1,14 @@
 {
   "name": "@niracler/encore",
   "version": "0.1.0",
-  "description": "Bring your AI agent sessions back on stage — like asciinema, but for AI agents (Codex, Claude Code, Claude, WorkBuddy).",
+  "description": "A curtain call for your AI agent runs. Replay Codex, Claude Code, Claude.ai, and WorkBuddy sessions as an interactive web stage with a live context-window inspector.",
   "type": "module",
+  "types": "./src/index.d.ts",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/niracler/encore.git"
   },
-  "homepage": "https://github.com/niracler/encore#readme",
+  "homepage": "https://encore.niracler.com",
   "bugs": {
     "url": "https://github.com/niracler/encore/issues"
   },
@@ -15,14 +16,20 @@
     "encore": "bin/encore.mjs"
   },
   "exports": {
-    ".": "./src/index.mjs",
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.mjs"
+    },
     "./player.js": "./player/encore-player.js",
-    "./player.css": "./player/encore-player.css"
+    "./player.css": "./player/encore-player.css",
+    "./session.schema.json": "./schema/session.schema.json"
   },
   "files": [
     "bin",
     "src",
-    "player",
+    "player/encore-player.js",
+    "player/encore-player.css",
+    "schema",
     "skills",
     "README.md",
     "README.zh-CN.md",
@@ -30,7 +37,12 @@
   ],
   "scripts": {
     "build:player": "node -e \"import('./src/player-assets.mjs').then(m => m.buildStandalonePlayerJs())\"",
+    "build:site": "node scripts/build-site.mjs",
+    "prepare": "npm run build:player",
     "prepack": "npm run build:player",
+    "pretest": "npm run build:player",
+    "prepublishOnly": "npm test",
+    "release": "pnpm publish && git push origin main --follow-tags && gh release create \"v$(node -p \"require('./package.json').version\")\" --generate-notes",
     "test": "node --test test/*.test.mjs"
   },
   "keywords": [
