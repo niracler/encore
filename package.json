@@ -12,7 +12,7 @@
     "url": "https://github.com/niracler/encore/issues"
   },
   "bin": {
-    "encore": "./bin/encore.mjs"
+    "encore": "bin/encore.mjs"
   },
   "exports": {
     ".": "./src/index.mjs",
