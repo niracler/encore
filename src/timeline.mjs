@@ -213,6 +213,28 @@ function defaultSystemPrompts(toolName) {
       },
     ]
   }
+  if (toolName === 'workbuddy') {
+    return [
+      {
+        id: 'sys-core',
+        stepIndex: -1,
+        tokEst: 3200,
+        tag: 'Core',
+        title: 'WorkBuddy Desktop Agent · Core Role & Execution Rules',
+        meta: '≈3.2k · Initial',
+        payload: `You are WorkBuddy, a desktop agent bound to the active local workspace directory.\n\n# Core Responsibilities\n1. Search and read workspace documents, spreadsheets, PDFs, and images on demand; ground answers in primary sources.\n2. Decompose complex research into parallel sub-tasks and synthesize verified deliverables.\n3. Confirm with the user before overwriting formal documents or sending external messages.`,
+      },
+      {
+        id: 'sys-workspace',
+        stepIndex: -1,
+        tokEst: 1800,
+        tag: 'Workspace',
+        title: 'Workspace File I/O & Deliverable Conventions',
+        meta: '≈1.8k · Initial',
+        payload: `# Workspace Conventions\n- Inspect directory structure and project notes before modifying files.\n- Save intermediate drafts, tables, and final reports under the designated workspace path.`,
+      },
+    ]
+  }
   return [
     {
       id: 'sys-core',
@@ -242,6 +264,14 @@ function defaultToolSchemas(toolName) {
       { id: 'schema-read-edit', stepIndex: -1, tokEst: 2400, tag: 'Schema', title: 'Read / Edit / Write · File Operations', meta: '≈2.4k · Schema', payload: '{\n  "tools": ["Read", "Edit", "Write"]\n}' },
       { id: 'schema-search', stepIndex: -1, tokEst: 1900, tag: 'Schema', title: 'Grep / Glob / WebSearch · Search & Discovery', meta: '≈1.9k · Schema', payload: '{\n  "tools": ["Grep", "Glob", "WebSearch", "WebFetch"]\n}' },
       { id: 'schema-agent-skill', stepIndex: -1, tokEst: 2000, tag: 'Schema', title: 'Agent / Skill / TodoWrite · Delegation & Skills', meta: '≈2.0k · Schema', payload: '{\n  "tools": ["Agent", "Skill", "TodoWrite"]\n}' },
+    ]
+  }
+  if (toolName === 'workbuddy') {
+    return [
+      { id: 'schema-wb-read', stepIndex: -1, tokEst: 1800, tag: 'Schema', title: 'read_file / list_dir · Workspace Document Reader', meta: '≈1.8k · Schema', payload: '{\n  "tools": ["read_file", "list_dir"]\n}' },
+      { id: 'schema-wb-write', stepIndex: -1, tokEst: 1900, tag: 'Schema', title: 'write_file / edit_file · Deliverable & Note Writer', meta: '≈1.9k · Schema', payload: '{\n  "tools": ["write_file", "edit_file"]\n}' },
+      { id: 'schema-wb-web', stepIndex: -1, tokEst: 2000, tag: 'Schema', title: 'web_search / run_command · Web Research & Scripts', meta: '≈2.0k · Schema', payload: '{\n  "tools": ["web_search", "run_command"]\n}' },
+      { id: 'schema-wb-agent', stepIndex: -1, tokEst: 2100, tag: 'Schema', title: 'Agent · Parallel Research Sub-tasks', meta: '≈2.1k · Schema', payload: '{\n  "tools": ["Agent"]\n}' },
     ]
   }
   return [

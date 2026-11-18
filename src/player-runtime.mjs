@@ -1230,6 +1230,24 @@ export async function createEncorePlayer(targetEl, sourceOrSession, options = {}
   if (!session && el.getAttribute('src')) {
     sourceOrSession = el.getAttribute('src')
   }
+  const preRenderedData = !session && !sourceOrSession
+    ? el.querySelector('[data-encore-session-data], #session-data')
+    : null
+  if (preRenderedData) {
+    document.documentElement.classList.add('js-session')
+    el.classList.add('session-wrap')
+    const appNode = el.querySelector('.session-app')
+    const activeLang = resolveLang(options.lang || el.dataset.lang || appNode?.dataset.encoreLang || 'zh')
+    const playerData = JSON.parse(preRenderedData.textContent)
+    const activeController = attachPlayerController(el, playerData, {
+      lang: activeLang,
+      initialStep: options.initialStep ?? -1,
+    })
+    return {
+      setLang: () => {},
+      getController: () => activeController,
+    }
+  }
   if (typeof sourceOrSession === 'string') {
     const srcUrl = sourceOrSession
     if (!baseUrl) {
@@ -1298,8 +1316,10 @@ export async function autoMountEncorePlayers() {
 }
 
 if (typeof globalThis !== 'undefined') {
+  globalThis.createSessionPlaybackModel = createSessionPlaybackModel
   globalThis.EncorePlayer = {
     create: createEncorePlayer,
+    attach: attachPlayerController,
     mountAll: autoMountEncorePlayers,
     createSessionPlaybackModel,
   }

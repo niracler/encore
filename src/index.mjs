@@ -3,6 +3,7 @@ import { basename, join, resolve } from 'node:path'
 import { readClaudeAi } from './claude-ai.mjs'
 import { readClaudeCode } from './claude-code.mjs'
 import { readCodex } from './codex.mjs'
+import { readWorkBuddy } from './workbuddy.mjs'
 import { cutSession, deriveDefaultTitle, readJsonl, tools } from './common.mjs'
 import { detectInput, detectJsonlTool, scanRecentSessions } from './detect.mjs'
 import { createTranslator, DICTS, resolveLang } from './i18n.mjs'
@@ -17,6 +18,7 @@ import { binSeconds, describeStats, kindOf, minutes, sumStats, timeline, waitThr
 
 const readers = {
   codex: async (files, options) => readCodex(await readJsonl(files, options), options),
+  workbuddy: async (files, options) => readWorkBuddy(await readJsonl(files, options), options),
   'claude-code': async (files, options) => readClaudeCode(await readJsonl(files, options), options),
   'claude-ai': async (files, options) => readClaudeAi(JSON.parse(readFileSync(files[0], 'utf8')), options),
 }
@@ -211,6 +213,7 @@ export {
   readClaudeAi,
   readClaudeCode,
   readCodex,
+  readWorkBuddy,
   readJsonl,
   redactSession,
   redactText,

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import sharp from 'sharp'
@@ -11,6 +11,7 @@ import {
   findLeaks,
   redactSession,
   renderPlayerWidget,
+  scanRecentSessions,
   timeline,
 } from '../src/index.mjs'
 
@@ -354,4 +355,95 @@ test('timeline preserves reasoning-only turns, prevents negative token regressio
   assert.equal(stepMatches.length, 6, 'DOM data-step count must match line.steps.length')
   assert.match(html, /用户手绘草图/, 'user reference frame label should render as stage card')
   assert.match(html, /<div class="session-tl-track-wrap" data-tl-track>\s*<span class="session-composer-progress"/, 'progress hairline should be inside track wrap for alignment')
+})
+
+test('buildReplay auto-detects workbuddy logs, scanRecentSessions includes workbuddy projects, and renderPlayerWidget supports custom back navigation', async () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'encore-wb-test-'))
+  try {
+    const wbProjectDir = join(tmp, 'workbuddy', 'workspace-a')
+    const wbLog = join(wbProjectDir, 'wb-session-1.jsonl')
+    const wbRecords = [
+      { type: 'ai-title', aiTitle: '整理竞品分析报告', timestamp: '2026-11-18T02:00:00.000Z' },
+      {
+        type: 'message',
+        role: 'user',
+        timestamp: '2026-11-18T02:00:02.000Z',
+        content: [
+          {
+            type: 'input_text',
+            text: '<system-reminder>ignore</system-reminder><user_query>请读取 @"docs/report.pdf" 并使用 @skill:/path/to/hv-analysis/SKILL.md 横纵分析 生成摘要</user_query>',
+          },
+        ],
+      },
+      {
+        type: 'reasoning',
+        timestamp: '2026-11-18T02:00:05.000Z',
+        rawContent: [{ type: 'text', text: '先解析用户附带的 PDF 文档并加载 hv-analysis 技能。' }],
+      },
+      {
+        type: 'function_call',
+        callId: 'wb_call_1',
+        name: 'Read',
+        arguments: JSON.stringify({ file_path: 'docs/report.pdf' }),
+        timestamp: '2026-11-18T02:00:08.000Z',
+      },
+      {
+        type: 'function_call_result',
+        callId: 'wb_call_1',
+        output: 'PDF content: 2026 Q4 Market Overview',
+        timestamp: '2026-11-18T02:00:11.000Z',
+      },
+      {
+        type: 'message',
+        role: 'assistant',
+        timestamp: '2026-11-18T02:00:20.000Z',
+        providerData: {
+          model: 'deepseek-v4',
+          messageId: 'msg_wb_1',
+          rawUsage: { total_tokens: 48200 },
+        },
+        content: [{ type: 'output_text', text: '已完成竞品分析报告摘要。' }],
+      },
+    ]
+    mkdirSync(wbProjectDir, { recursive: true })
+    writeFileSync(wbLog, wbRecords.map(r => JSON.stringify(r)).join('\n'), 'utf8')
+
+    const detected = await detectInput(wbLog)
+    assert.equal(detected.kind, 'raw-log')
+    assert.equal(detected.tool, 'workbuddy')
+
+    const wbOut = join(tmp, 'wb-out')
+    const wbResult = await buildReplay(wbLog, { outDir: wbOut, lang: 'zh' })
+    assert.equal(wbResult.tool, 'workbuddy')
+    assert.equal(wbResult.toolLabel, 'WorkBuddy')
+    assert.equal(wbResult.session.title, '整理竞品分析报告')
+    assert.equal(wbResult.session.model, 'deepseek-v4')
+    assert.equal(wbResult.session.tokens, 48200)
+    assert.match(wbResult.session.items[0].text, /@hv-analysis 横纵分析/)
+    assert.match(wbResult.session.items[0].text, /\[附件：report\.pdf\]/)
+
+    const line = timeline(wbResult.session, { lang: 'zh' })
+    const sysCat = line.steps[0].contextSnapshot.categories.find(c => c.id === 'sys')
+    assert.ok(sysCat.items.some(item => /WorkBuddy/.test(item.title)))
+
+    const customHtml = renderPlayerWidget(wbResult.session, line, {
+      lang: 'zh',
+      backHref: '/sessions/00/',
+      backLabel: '← 第 0 讲的对话',
+    })
+    assert.match(customHtml, /<a class="session-back" href="\/sessions\/00\/">← 第 0 讲的对话<\/a>/)
+    assert.doesNotMatch(customHtml, /data-encore-lang-toggle/)
+
+    const scanned = await scanRecentSessions({
+      codexDir: join(tmp, 'empty-codex'),
+      claudeDir: join(tmp, 'empty-claude'),
+      workbuddyDir: join(tmp, 'workbuddy'),
+    })
+    assert.equal(scanned.length, 1)
+    assert.equal(scanned[0].tool, 'workbuddy')
+    assert.equal(scanned[0].toolLabel, 'WorkBuddy')
+    assert.equal(scanned[0].preview, '整理竞品分析报告')
+  } finally {
+    rmSync(tmp, { recursive: true, force: true })
+  }
 })

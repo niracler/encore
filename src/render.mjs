@@ -4,6 +4,7 @@ import { binSeconds, describeStats, minutes, sumStats, timeline } from './timeli
 
 const toolLabels = {
   codex: 'Codex',
+  workbuddy: 'WorkBuddy',
   'claude-code': 'Claude Code',
   'claude-ai': 'Claude',
 }
@@ -502,7 +503,13 @@ export function buildPlayerData(session, line, { baseUrl = '' } = {}) {
   }
 }
 
-export function renderPlayerWidget(session, computedTimeline, { lang = 'zh', baseUrl = '' } = {}) {
+export function renderPlayerWidget(session, computedTimeline, {
+  lang = 'zh',
+  baseUrl = '',
+  backHref = '',
+  backLabel = '',
+  showLangToggle = !backHref,
+} = {}) {
   const t = createTranslator(lang || session.lang || 'zh')
   const line = computedTimeline || timeline(session, { lang: t.lang })
   const tool = toolLabels[session.tool] || session.tool || 'Agent'
@@ -513,18 +520,24 @@ export function renderPlayerWidget(session, computedTimeline, { lang = 'zh', bas
   const firstPromptDraft = rawFirstPrompt && rawFirstPrompt !== '（中途打断）' ? rawFirstPrompt : ''
   const hasInitialDraft = Boolean(firstPromptDraft)
   const dataJson = JSON.stringify(buildPlayerData(session, line, { baseUrl })).replace(/</g, '\\u003c')
+  const leadBadge = backHref && backLabel
+    ? `<a class="session-back" href="${escape(backHref)}">${escape(backLabel)}</a>`
+    : `<span class="encore-brand-badge" aria-hidden="true">ENCORE</span>`
+  const rightControls = showLangToggle
+    ? `<div class="session-topbar-right">
+        <button type="button" class="encore-lang-btn" data-encore-lang-toggle title="${escape(t('toggleLangTitle'))}">${escape(t('toggleLangLabel'))}</button>
+      </div>`
+    : ''
 
   return `<div class="session-app" data-encore-lang="${escape(t.lang)}">
     <header class="session-topbar">
       <div class="session-topbar-left">
-        <span class="encore-brand-badge" aria-hidden="true">ENCORE</span>
+        ${leadBadge}
         <span class="session-topbar-sep" aria-hidden="true">/</span>
         <h1 class="session-title">${escape(title)}</h1>
         <span class="session-model-pill">${escape(tool)}${session.model ? ` · ${escape(session.model)}` : ''}</span>
       </div>
-      <div class="session-topbar-right">
-        <button type="button" class="encore-lang-btn" data-encore-lang-toggle title="${escape(t('toggleLangTitle'))}">${escape(t('toggleLangLabel'))}</button>
-      </div>
+      ${rightControls}
     </header>
     <section class="session-player" aria-label="${escape(t('tlAria'))}" hidden>
       ${scrubber(line)}
