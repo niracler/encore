@@ -1,0 +1,54 @@
+name: Windows CLI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Windows CLI smoke
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm exec playwright install chromium --only-shell
+
+      - name: Install the packed CLI outside the checkout
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $consumer = New-Item -ItemType Directory -Path "$env:RUNNER_TEMP\Encore 安装 测试"
+          $version = (Get-Content -Raw package.json | ConvertFrom-Json).version
+          npm pack --pack-destination $consumer.FullName
+          Set-Location $consumer.FullName
+          '{"name":"encore-consumer","private":true}' | Set-Content -Encoding utf8 package.json
+          $archive = Get-Item .\*.tgz
+          npm install --no-audit --no-fund $archive.FullName
+          $installedVersion = .\node_modules\.bin\encore.cmd --version
+          if ($installedVersion -ne $version) { throw "Expected $version, got $installedVersion" }
+          "SMOKE_DIR=$($consumer.FullName)" >> $env:GITHUB_ENV
+
+      - name: Export a replay from a path with spaces and Chinese characters
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          Copy-Item test/fixtures/windows-smoke.jsonl "$env:SMOKE_DIR\输入 日志.jsonl"
+          Set-Location $env:SMOKE_DIR
+          .\node_modules\.bin\encore.cmd '.\输入 日志.jsonl' -o '.\输出 回放' --lang zh --no-serve
+
+      - name: Play the exported message and screenshot in Chromium
+        run: node --test test/windows-cli-smoke.mjs
