@@ -43,7 +43,7 @@ test('the installed CLI serves a playable message and WebP screenshot', { timeou
   ])
   assert.equal(data.status(), 200)
   const prompt = page.locator('[data-kind="prompt"]')
-  const text = prompt.getByText('这条消息用于验证合并拦截。', { exact: true })
+  const text = prompt.getByText(message, { exact: true })
   await expect(text).toBeHidden()
   await page.getByRole('button', { name: '播放', exact: true }).click()
   await expect(text).toBeVisible()
