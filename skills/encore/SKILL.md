@@ -1,13 +1,13 @@
 ---
 name: encore
 description: >
-  Export, curate, and polish AI Agent session replays (Codex, Claude Code, Claude.ai) into standalone web stage replays using Encore.
+  Export, curate, and polish AI Agent session replays (Codex, Claude Code, Claude.ai, WorkBuddy) into standalone web stage replays using Encore.
   Use when the user asks to export a session replay, polish/curate a generated `session.json`, prune and label `.webp` process screenshots, write a replay title and story intro, or clean up semantic privacy leaks before publishing.
 ---
 
 # Encore — AI Agent Session Replay & Curation Skill
 
-`encore` turns raw AI Agent logs (`Codex`, `Claude Code`, `Claude.ai`) into an interactive web replay stage (**Left**: streaming conversation, tool shimmer, sub-agents, and visual deliverables; **Right**: live Context Window inspector and compaction boundaries; **Bottom**: milestone timeline).
+`encore` turns raw AI Agent logs (`Codex`, `Claude Code`, `Claude.ai`, `WorkBuddy`) into an interactive web replay stage (**Left**: streaming conversation, tool shimmer, sub-agents, and visual deliverables; **Right**: live Context Window inspector and compaction boundaries; **Bottom**: milestone timeline).
 
 While `npx @niracler/encore` produces an immediately playable replay ("raw cut / 生肉"), this skill guides you through turning it into a curated, publication-ready showcase ("director's cut / 熟肉").
 

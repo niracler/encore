@@ -1,7 +1,7 @@
 # Encore
 
 **Bring your AI agent sessions back on stage.**
-*把 AI Agent 的工作现场搬回舞台再演一场 —— AI Agent 时代的 [`asciinema`](https://asciinema.org)（支持 `Codex`、`Claude Code`、`Claude.ai`）。*
+*把 AI Agent 的工作现场搬回舞台再演一场 —— AI Agent 时代的 [`asciinema`](https://asciinema.org)（支持 `Codex`、`Claude Code`、`Claude.ai`、`WorkBuddy`）。*
 
 [English](./README.md) · [简体中文](./README.zh-CN.md)
 
@@ -13,7 +13,7 @@
 
 把 AI 编程或设计过程录成视频又糊又大，而导出成普通 Markdown 聊天记录又会丢掉 Agent 工作流里最精彩的部分：**每一轮上下文窗口（Context Window）里到底塞了什么、调用了哪些工具与子代理、中间视觉稿是怎么一版版演进出来的，以及什么时候触发了上下文压缩（Compaction）。**
 
-**Encore** 将 **OpenAI Codex**、**Claude Code** 和 **Claude.ai** 的原始会话日志一键转换为可交互的独立网页剧场：
+**Encore** 将 **OpenAI Codex**、**Claude Code**、**Claude.ai** 和 **WorkBuddy** 的原始会话日志一键转换为可交互的独立网页剧场：
 
 | 舞台区域 | 还原内容 |
 | :--- | :--- |
@@ -40,7 +40,7 @@
 
 ### 1. 免找文件：直接扫描本机最近对话
 
-在终端直接运行 `npx @niracler/encore`（不带参数），工具会自动扫描 `~/.codex/sessions` 和 `~/.claude/projects` 下最近的对话，显示时间与首句提问，按 `↑` / `↓` 挑一条回车即可导出并打开预览：
+在终端直接运行 `npx @niracler/encore`（不带参数），工具会自动扫描 `~/.codex/sessions`、`~/.claude/projects` 和 `~/.workbuddy/projects` 下最近的对话，显示时间与首句提问，按 `↑` / `↓` 挑一条回车即可导出并打开预览：
 
 ```bash
 npx @niracler/encore
@@ -92,7 +92,7 @@ Agent 会自动完成 4 件事：
 
 ```text
 用法：
-  encore                              扫描本机最近的 Codex 与 Claude Code 会话，上下键选择导出
+  encore                              扫描本机最近的 Codex、Claude Code 与 WorkBuddy 会话，上下键选择导出
   encore <log.jsonl | dir> [options]  从原始日志一步生成回放目录，或对已修改的目录重新同步
   encore play <dir> [--port 4180]     启动本地预览服务
 
