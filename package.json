@@ -1,0 +1,57 @@
+{
+  "name": "@niracler/encore",
+  "version": "0.1.0",
+  "description": "Bring your AI agent sessions back on stage — like asciinema, but for AI agents (Codex, Claude Code, Claude).",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/niracler/encore.git"
+  },
+  "homepage": "https://github.com/niracler/encore#readme",
+  "bugs": {
+    "url": "https://github.com/niracler/encore/issues"
+  },
+  "bin": {
+    "encore": "./bin/encore.mjs"
+  },
+  "exports": {
+    ".": "./src/index.mjs",
+    "./player.js": "./player/encore-player.js",
+    "./player.css": "./player/encore-player.css"
+  },
+  "files": [
+    "bin",
+    "src",
+    "player",
+    "skills",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build:player": "node -e \"import('./src/player-assets.mjs').then(m => m.buildStandalonePlayerJs())\"",
+    "prepack": "npm run build:player",
+    "test": "node --test test/*.test.mjs"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "replay",
+    "session-player",
+    "codex",
+    "claude-code",
+    "context-engineering",
+    "asciinema"
+  ],
+  "author": "niracler",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "sharp": "^0.35.5"
+  }
+}
