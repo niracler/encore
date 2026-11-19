@@ -117,6 +117,29 @@ test('export captures external handoffs, verifies only recorded digests, and pre
   assert.ok(renderPlayerWidget(altered.session, undefined, { lang: 'zh' }).includes('与会话记录的校验值不符'))
 })
 
+test('workbook previews preserve tab order and compare the requested Excel cell', async t => {
+  const { default: ExcelJS } = await import('exceljs')
+  const dir = mkdtempSync(join(tmpdir(), 'encore-workbook-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  for (const [name, value] of [['before', '经销商'], ['after', '分销商']]) {
+    const book = new ExcelJS.Workbook()
+    const sheet = book.addWorksheet('名单')
+    book.addWorksheet('说明').getCell('A1').value = '使用说明'
+    sheet.getCell('A1').value = '公司'
+    sheet.getCell('A2').value = 'Example'
+    sheet.getCell('F2').value = value
+    await book.xlsx.writeFile(join(dir, name + '.xlsx'))
+  }
+  const file = { title: '名单', href: 'after.xlsx', revision: { href: 'before.xlsx', label: '公司类型', sheet: '名单', cell: 'F2' } }
+  writeFileSync(join(dir, 'session.json'), JSON.stringify({ ...sampleSession, deliverables: [file] }))
+  const { session } = await buildReplay(dir)
+  const { preview } = session.deliverables[0]
+  assert.deepEqual(preview.change, { before: '经销商', after: '分销商' })
+  const sheets = JSON.parse(readFileSync(join(dir, preview.src), 'utf8'))
+  assert.deepEqual(sheets.map(sheet => sheet.sheet), ['名单', '说明'])
+  assert.equal(sheets[0].data[1][5], '分销商')
+})
+
 test('createSessionPlaybackModel hydrates slim snapshots and steps', () => {
   const line = timeline(sampleSession, { lang: 'zh' })
   const model = createSessionPlaybackModel({

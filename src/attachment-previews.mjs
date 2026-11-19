@@ -3,6 +3,18 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameS
 import { extname, join, resolve, sep } from 'node:path'
 import sharp from 'sharp'
 
+async function readWorkbook(bytes) {
+  const { default: ExcelJS } = await import('exceljs')
+  const workbook = new ExcelJS.Workbook()
+  // The preview reads worksheet cells. Excel table definitions can use producer-specific relationship paths.
+  await workbook.xlsx.load(bytes, { ignoreNodes: ['tableParts'] })
+  return workbook
+}
+
+function cellText(cell) {
+  return cell.value instanceof Date ? cell.value.toISOString() : cell.text
+}
+
 function readReplayAsset(directory, href) {
   if (!href || /^(?:[a-z][\w+.-]*:|[/\\])/i.test(href)) throw new Error('Expected a replay-relative file')
   const path = realpathSync(resolve(directory, href))
@@ -12,13 +24,12 @@ function readReplayAsset(directory, href) {
 
 async function revisionValue(bytes, ext, revision) {
   if (ext === '.xlsx') {
-    const { readSheet } = await import('read-excel-file/node')
     const address = /^([A-Z]+)([1-9]\d*)$/i.exec(revision.cell)
     if (!address || !revision.sheet) throw new Error('Expected a sheet name and A1 cell address')
-    const column = [...address[1].toUpperCase()].reduce((n, c) => n * 26 + c.charCodeAt(0) - 64, 0)
-    const rows = await readSheet(bytes, revision.sheet, { trim: false })
-    const value = rows[Number(address[2]) - 1]?.[column - 1]
-    return value instanceof Date ? value.toISOString() : String(value ?? '')
+    const workbook = await readWorkbook(bytes)
+    const sheet = workbook.getWorksheet(revision.sheet)
+    if (!sheet) throw new Error(`Worksheet not found: ${revision.sheet}`)
+    return cellText(sheet.getCell(revision.cell.toUpperCase()))
   }
   const { PDFiumLibrary } = await import('@hyzyla/pdfium')
   const library = await PDFiumLibrary.init()
@@ -62,8 +73,16 @@ async function previewPdf(bytes, staging, url) {
 }
 
 async function previewWorkbook(bytes, staging, url, file) {
-  const { default: readWorkbook } = await import('read-excel-file/node')
-  const sheets = await readWorkbook(bytes)
+  const workbook = await readWorkbook(bytes)
+  const sheets = workbook.worksheets.map(sheet => {
+    const data = []
+    sheet.eachRow({ includeEmpty: true }, row => {
+      const values = []
+      row.eachCell({ includeEmpty: true }, cell => values.push(cellText(cell)))
+      data.push(values)
+    })
+    return { sheet: sheet.name, data }
+  })
   const selected = sheets.find(sheet => sheet.sheet === file.previewSheet) || sheets[0]
   if (!selected) throw new Error('Empty workbook')
   const header = selected.data[0] || []
