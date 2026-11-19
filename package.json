@@ -65,6 +65,8 @@
     "node": ">=20.10.0"
   },
   "dependencies": {
+    "@hyzyla/pdfium": "2.1.13",
+    "read-excel-file": "9.3.17",
     "sharp": "^0.35.5"
   },
   "devDependencies": {

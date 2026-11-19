@@ -171,6 +171,7 @@ const normAgentName = value => String(value || '').split('/').filter(Boolean).po
 
 export function readCodex(records, { includeMemory = false } = {}) {
   const transcript = createTranscript()
+  let cwd
   const working = new Map()
   let model
   let title
@@ -246,6 +247,7 @@ export function readCodex(records, { includeMemory = false } = {}) {
     const payload = record.payload || {}
     const time = isoTime(record.timestamp)
     if (record.type === 'session_meta') {
+      cwd = payload.cwd || cwd
       model = model || payload.model
       if (payload.title && !title) title = payload.title
       const baseText = typeof payload.base_instructions === 'string' ? payload.base_instructions : payload.base_instructions?.text
@@ -254,7 +256,10 @@ export function readCodex(records, { includeMemory = false } = {}) {
         initSys.unshift(...splitMarkdownSections(baseText, 'init-sys-base', 'Core'))
       }
     }
-    if (record.type === 'turn_context') model = model || payload.model
+    if (record.type === 'turn_context') {
+      model = model || payload.model
+      cwd = payload.cwd || cwd
+    }
     if (record.type === 'world_state' && payload.state?.agents_md?.text) {
       addMem('agents-md', 'AGENTS.md', 'AGENTS.md（工作区与全局协作指令）', payload.state.agents_md.text)
     }
@@ -352,10 +357,12 @@ export function readCodex(records, { includeMemory = false } = {}) {
       } else if (!injected.test(text)) {
         sawFirstUserTurn = true
         pendingCompact = null
-        transcript.user(cleanPrompt(text), time, { images: imagesOf(payload.content) })
+        const header = text.match(/^# Files mentioned by the user:\s*\n([\s\S]*?)\n## My request:/)?.[1] || ''
+        const references = [...header.matchAll(/^## .+?: (.+)$/gm)].map(match => match[1].trim())
+        transcript.user(cleanPrompt(text), time, { images: imagesOf(payload.content), references, cwd })
       }
     } else if (payload.type === 'message' && payload.role === 'assistant') {
-      transcript.assistant(textOf(payload.content), time)
+      transcript.assistant(textOf(payload.content), time, { cwd })
     } else if (payload.type === 'reasoning') {
       transcript.reasoning((payload.summary || []).map(part => part.text).join('\n\n'), time)
     } else if (payload.type === 'custom_tool_call') {

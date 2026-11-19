@@ -41,7 +41,9 @@ export function readClaudeAi(data, { conversation } = {}) {
         file => file.file_name || file.extracted_content?.match(/^#*\s*(\S.*)$/m)?.[1].trim()
       )
       const files = names.filter(Boolean).map(attachmentLabel)
-      transcript.user([textOf(blocks.filter(block => block.type === 'text')).trim(), ...files].filter(Boolean).join('\n\n'), time)
+      const deliverables = names.filter(Boolean).map(title => ({ title, availability: 'missing' }))
+      transcript.user([textOf(blocks.filter(block => block.type === 'text')).trim(), ...files].filter(Boolean).join('\n\n'), time,
+        deliverables.length ? { deliverables } : {})
       continue
     }
     const stamps = blocks.map(block => isoTime(block.start_timestamp))

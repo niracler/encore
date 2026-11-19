@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { readClaudeAi } from './claude-ai.mjs'
+import { prepareAttachmentPreviews } from './attachment-previews.mjs'
+import { collectExternalFiles, nativeSessionRoot } from './external-files.mjs'
 import { readClaudeCode } from './claude-code.mjs'
 import { readCodex } from './codex.mjs'
 import { readWorkBuddy } from './workbuddy.mjs'
@@ -17,10 +19,10 @@ import { openBrowser, serveReplayDir } from './server.mjs'
 import { binSeconds, describeStats, kindOf, minutes, sumStats, timeline, waitThreshold } from './timeline.mjs'
 
 const readers = {
-  codex: async (files, options) => readCodex(await readJsonl(files, options), options),
-  workbuddy: async (files, options) => readWorkBuddy(await readJsonl(files, options), options),
-  'claude-code': async (files, options) => readClaudeCode(await readJsonl(files, options), options),
-  'claude-ai': async (files, options) => readClaudeAi(JSON.parse(readFileSync(files[0], 'utf8')), options),
+  codex: readCodex,
+  workbuddy: readWorkBuddy,
+  'claude-code': readClaudeCode,
+  'claude-ai': readClaudeAi,
 }
 
 function defaultOutDirForLog(filePath, tool) {
@@ -47,6 +49,7 @@ export async function importRawSession(files, {
   clip,
   conversation,
   includeMemory = false,
+  assetRoots,
 } = {}) {
   const fileList = [].concat(files).map(f => resolve(f))
   const detectedTool = tool || (await detectInput(fileList[0])).tool || 'codex'
@@ -55,7 +58,9 @@ export async function importRawSession(files, {
   }
   const targetDir = outDir ? resolve(outDir) : defaultOutDirForLog(fileList[0], detectedTool)
   const window = { from, to }
-  const raw = cutSession(await readers[detectedTool](fileList, { ...window, conversation, includeMemory }), window)
+  const records = detectedTool === 'claude-ai' ? JSON.parse(readFileSync(fileList[0], 'utf8')) : await readJsonl(fileList, window)
+  const nativeRoot = await nativeSessionRoot(fileList[0], detectedTool, records)
+  const raw = cutSession(readers[detectedTool](records, { ...window, conversation, includeMemory }), window)
 
   if (title) raw.title = title
   if (description !== undefined) raw.description = description
@@ -76,12 +81,14 @@ export async function importRawSession(files, {
     width: imageWidth,
     lang: resolvedLang,
   })
+  await collectExternalFiles(withImages, targetDir, assetRoots, nativeRoot)
   const redacted = redactSession(withImages)
   const limit = clip ? Number(clip) : undefined
   const session = clipSession(redacted, limit ? { input: limit, output: limit } : undefined)
   const leaks = findLeaks(session)
 
   mkdirSync(targetDir, { recursive: true })
+  await prepareAttachmentPreviews(session, targetDir)
   const sessionFile = join(targetDir, 'session.json')
   writeFileSync(sessionFile, `${JSON.stringify(session, null, 2)}\n`, 'utf8')
   const assets = writePlayerAssets(targetDir, {
@@ -105,13 +112,14 @@ export async function rebuildReplayDir(dirOrSessionFile, {
   lang,
   title,
   description,
+  assetRoots,
 } = {}) {
   const detected = await detectInput(dirOrSessionFile)
   const targetDir = detected.dir
   const sessionFile = detected.sessionFile
   const session = JSON.parse(readFileSync(sessionFile, 'utf8'))
 
-  let modified = false
+  let modified = await collectExternalFiles(session, targetDir, assetRoots)
   if (title !== undefined && title !== session.title) {
     session.title = title
     modified = true
@@ -154,6 +162,7 @@ export async function rebuildReplayDir(dirOrSessionFile, {
       }
     }
   }
+  if (await prepareAttachmentPreviews(session, targetDir)) modified = true
   if (modified) {
     writeFileSync(sessionFile, `${JSON.stringify(session, null, 2)}\n`, 'utf8')
   }

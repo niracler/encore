@@ -25,6 +25,7 @@ Usage:
 
 Options:
   -o, --out <dir>          Output directory (default: ./replays/<session-slug>)
+      --asset-root <dir>   Set collection directories (repeatable; defaults to the current and native session workspaces)
   -l, --lang <zh|en|auto>  Player UI language (default: auto)
       --title <text>       Override session title
       --desc <text>        Set opening description shown before playback starts
@@ -197,6 +198,7 @@ async function main() {
     allowPositionals: true,
     options: {
       out: { type: 'string', short: 'o' },
+      'asset-root': { type: 'string', multiple: true },
       lang: { type: 'string', short: 'l' },
       title: { type: 'string' },
       desc: { type: 'string' },
@@ -230,6 +232,7 @@ async function main() {
   if (positionals[0] === 'play' || positionals[0] === 'preview') {
     const targetDir = resolve(positionals[1] || '.')
     const rebuilt = await rebuildReplayDir(targetDir, {
+      assetRoots: values['asset-root'],
       lang: values.lang,
       title: values.title,
       description: values.desc,
@@ -273,6 +276,7 @@ async function main() {
   }
 
   const result = await buildReplay(targets, {
+    assetRoots: values['asset-root'],
     tool: explicitTool,
     outDir: values.out,
     lang: values.lang || 'auto',

@@ -144,13 +144,75 @@
         "title": { "type": "string" },
         "href": { "type": "string" },
         "meta": { "type": "string" },
-        "cover": { "type": "string" }
+        "cover": { "type": "string" },
+        "previewSheet": { "type": "string" },
+        "source": {
+          "type": "object", "required": ["path"],
+          "description": "External reference consumed at export. An optional SHA-256 must come from the session at handoff.",
+          "properties": { "path": { "type": "string" }, "sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" } }
+        },
+        "availability": { "enum": ["verified", "export-copy", "missing"] },
+        "sessionSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "unavailableReason": { "enum": ["outside-root", "unreadable"] },
+        "previewColumns": { "type": "array", "items": { "type": "string" } },
+        "revision": {
+          "type": "object",
+          "description": "Earlier local file and the corresponding line or cell to compare in both versions.",
+          "required": ["href", "label"],
+          "oneOf": [{ "required": ["page", "linePrefix"] }, { "required": ["sheet", "cell"] }],
+          "properties": {
+            "href": { "type": "string" }, "label": { "type": "string" },
+            "page": { "type": "integer", "minimum": 1 }, "linePrefix": { "type": "string", "minLength": 1 },
+            "sheet": { "type": "string", "minLength": 1 }, "cell": { "type": "string", "pattern": "^[a-zA-Z]+[1-9][0-9]*$" }
+          }
+        },
+        "preview": {
+          "properties": {
+            "change": {
+              "type": "object", "required": ["before", "after"],
+              "properties": { "before": { "type": "string" }, "after": { "type": "string" } }
+            }
+          },
+          "oneOf": [
+            {
+              "type": "object", "required": ["type", "pages"],
+              "properties": {
+                "type": { "const": "pdf" },
+                "pages": { "type": "array", "minItems": 1, "items": {
+                  "type": "object", "required": ["src", "width", "height"],
+                  "properties": { "src": { "type": "string" }, "width": { "type": "integer", "minimum": 1 }, "height": { "type": "integer", "minimum": 1 } }
+                } }
+              }
+            },
+            {
+              "type": "object", "required": ["type", "src", "sheet", "count", "rows"],
+              "properties": {
+                "type": { "const": "xlsx" }, "src": { "type": "string" }, "sheet": { "type": "string" },
+                "count": { "type": "integer", "minimum": 1 },
+                "rows": { "type": "array", "items": { "type": "array", "items": { "type": "string" } } }
+              }
+            }
+          ]
+        },
+        "portrait": {
+          "description": "Portrait cut of the same video, sharing the landscape cut's timeline.",
+          "type": "object",
+          "required": ["href"],
+          "properties": {
+            "href": { "type": "string" },
+            "cover": { "type": "string" }
+          }
+        }
       }
     },
     "sessionItem": {
       "type": "object",
       "required": ["type"],
       "properties": {
+        "deliverables": {
+          "type": "array", "description": "Files handed over at this event.",
+          "items": { "$ref": "#/$defs/deliverable" }
+        },
         "type": {
           "type": "string",
           "enum": ["user", "assistant", "reasoning", "tool", "compact"]

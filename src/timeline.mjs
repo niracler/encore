@@ -462,7 +462,9 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
   }
   for (const item of items) {
     if (item.type === 'tool' || item.type === 'reasoning') {
+      if (item.deliverables?.length) flushWork()
       work.push(item)
+      if (item.deliverables?.length) flushWork()
       continue
     }
     flushWork()
