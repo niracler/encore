@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Live Demos (encore.niracler.com)
+    url: https://encore.niracler.com
+    about: Try interactive Encore replays across Codex, Claude Code, Claude.ai, and WorkBuddy.

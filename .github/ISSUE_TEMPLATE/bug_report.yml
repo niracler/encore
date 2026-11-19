@@ -1,0 +1,36 @@
+name: Bug Report
+description: Report a CLI parsing, redaction, or browser player issue
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent / Source Format
+      options:
+        - Codex (.jsonl / .jsonl.zst)
+        - Claude Code (.jsonl)
+        - Claude.ai (conversations.json)
+        - WorkBuddy (.jsonl)
+        - Browser Player / Embed
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the expected behavior and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Command & minimal sanitized sample
+      description: Please redact any API keys, private paths, or internal data before posting.
+      placeholder: |
+        npx @niracler/encore@latest ...
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: "Node.js 22.x · macOS / Linux / Windows · Encore v0.2.0"
