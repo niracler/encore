@@ -185,13 +185,10 @@ const html = `<!doctype html>
     .showcase-stage .session-wrap {
       margin: 10px auto 12px;
     }
-    .showcase-stage .session-app {
-      height: calc(100dvh - 96px);
-      min-height: 580px;
-    }
-    @media (max-width: 860px) {
+    @media (width > 920px) {
       .showcase-stage .session-app {
-        height: calc(100dvh - 140px);
+        height: calc(100dvh - 96px);
+        min-height: 580px;
       }
     }
   </style>
