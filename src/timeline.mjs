@@ -102,48 +102,64 @@ function extractFileChips(work) {
   return { tools, changes, memories }
 }
 
+function documentEdits(item) {
+  const input = String(item.input || '').trim()
+  if (!input) return []
+  const isEdit = item.kind === 'edit' || item.stats?.edit
+  const summaryFile = String(item.summary || '').match(/^(?:写入|修改|Write|Edit)\s+([^\s、,]+\.md)(?:\s|$)/i)?.[1]
+  if (!isEdit && !summaryFile && item.name !== 'apply_patch') return []
+  if (!/^\*\*\* Begin Patch\b/.test(input)) {
+    const path = isEdit && typeof item.file === 'string' && /\.md$/i.test(item.file.trim())
+      ? item.file.trim() : summaryFile
+    return path ? [{ path, content: input }] : []
+  }
+
+  const edits = []
+  let current
+  for (const line of input.split(/\r?\n/)) {
+    const header = line.match(/^\*\*\* (Add|Update|Delete) File: (.+)$/)
+    if (header) {
+      current = undefined
+      if (header[1] !== 'Delete') {
+        current = { path: header[2].trim(), lines: [] }
+        edits.push(current)
+      }
+    } else if (line === '*** End Patch') {
+      break
+    } else if (line.startsWith('…（中间省略 ')) {
+      // A clipped section may contain a file header. Wait for the next one.
+      current = undefined
+    } else if (current && line.startsWith('*** Move to: ')) {
+      current.path = line.slice('*** Move to: '.length).trim()
+    } else if (current && /^[+ ]/.test(line)) {
+      current.lines.push(line.slice(1))
+    }
+  }
+  return edits.map(({ path, lines }) => ({ path, content: lines.join('\n').trim() }))
+}
+
 function extractStepDocs(toolItems, stepIndex) {
-  const byFile = new Map()
+  const byPath = new Map()
   toolItems.forEach((item, idx) => {
-    if (!item.input) return
-    const isEdit = Boolean(item.kind === 'edit' || item.stats?.edit)
-    const explicitMd = isEdit && typeof item.file === 'string' && /\.md$/i.test(item.file.trim())
-      ? item.file.trim().split(/[/\\]/).pop()
-      : ''
-    const m = explicitMd
-      ? [null, explicitMd]
-      : String(item.summary || '').match(/^(?:写入|修改|Write|Edit)\s+([^\s、,]+\.md)(?:\s|$)/i)
-    if (!m) return
-    const file = m[1]
-    if (file.startsWith('_') || /^\d{4}-\d{2}-\d{2}\.md$/.test(file)) return
-    let content = String(item.input).trim()
-    if (/^\*\*\* Begin Patch\b/.test(content)) {
-      const bodyLines = content
-        .split('\n')
-        .filter(line => !/^(\*\*\* (?:Begin Patch|End Patch|Add File:|Update File:|Delete File:|Move to:)|@@)/.test(line) && !line.startsWith('-'))
-        .map(line => (line.startsWith('+') || line.startsWith(' ')) ? line.slice(1) : line)
-      content = bodyLines.join('\n').trim()
+    for (const [part, { path, content }] of documentEdits(item).entries()) {
+      const file = path.split(/[/\\]/).pop()
+      if (!/\.md$/i.test(file) || file.startsWith('_') || /^\d{4}-\d{2}-\d{2}\.md$/.test(file)) continue
+      const fm = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
+      const body = fm ? fm[2].trim() : content
+      const heading = body.match(/^#{1,3}\s+([^\r\n]+)/m)?.[1]?.replace(/^#+\s*/, '').trim()
+      const title = heading || fm?.[1].match(/^\s*title\s*:\s*['"]?([^\r\n'"]+)['"]?\s*$/m)?.[1]?.trim()
+      if (!title) continue
+      byPath.set(path, {
+        id: part ? `doc-${stepIndex}-${idx}-${part}` : `doc-${stepIndex}-${idx}`,
+        file,
+        title,
+        chars: content.length,
+        content: body || content,
+        t: item.t || 0,
+      })
     }
-    let bodyWithoutFm = content
-    let fmTitle = ''
-    const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
-    if (fmMatch) {
-      fmTitle = fmMatch[1].match(/^\s*title\s*:\s*['"]?([^\r\n'"]+)['"]?\s*$/m)?.[1]?.trim() || ''
-      bodyWithoutFm = fmMatch[2].trim()
-    }
-    const headingMatch = bodyWithoutFm.match(/^#{1,3}\s+([^\r\n]+)/m)
-    if (!headingMatch && !fmTitle) return
-    const title = (headingMatch ? headingMatch[1].replace(/^#+\s*/, '').trim() : fmTitle) || file
-    byFile.set(file, {
-      id: `doc-${stepIndex}-${idx}`,
-      file,
-      title,
-      chars: content.length,
-      content: bodyWithoutFm || content,
-      t: item.t || 0,
-    })
   })
-  return [...byFile.values()]
+  return [...byPath.values()]
 }
 
 function extractStepSubagents(toolItems, stepIndex) {
@@ -286,6 +302,14 @@ function defaultToolSchemas(toolName) {
       { id: 'schema-read-edit', stepIndex: -1, tokEst: 2400, tag: 'Schema', title: 'Read / Edit / Write · File Operations', meta: '≈2.4k · Schema', payload: '{\n  "tools": ["Read", "Edit", "Write"]\n}' },
       { id: 'schema-search', stepIndex: -1, tokEst: 1900, tag: 'Schema', title: 'Grep / Glob / WebSearch · Search & Discovery', meta: '≈1.9k · Schema', payload: '{\n  "tools": ["Grep", "Glob", "WebSearch", "WebFetch"]\n}' },
       { id: 'schema-agent-skill', stepIndex: -1, tokEst: 2000, tag: 'Schema', title: 'Agent / Skill / TodoWrite · Delegation & Skills', meta: '≈2.0k · Schema', payload: '{\n  "tools": ["Agent", "Skill", "TodoWrite"]\n}' },
+    ]
+  }
+  if (toolName === 'workbuddy') {
+    return [
+      { id: 'schema-wb-read', stepIndex: -1, tokEst: 1800, tag: 'Schema', title: 'read_file / list_dir · Workspace Document Reader', meta: '≈1.8k · Schema', payload: '{\n  "tools": ["read_file", "list_dir"]\n}' },
+      { id: 'schema-wb-write', stepIndex: -1, tokEst: 1900, tag: 'Schema', title: 'write_file / edit_file · Deliverable & Note Writer', meta: '≈1.9k · Schema', payload: '{\n  "tools": ["write_file", "edit_file"]\n}' },
+      { id: 'schema-wb-web', stepIndex: -1, tokEst: 2000, tag: 'Schema', title: 'web_search / run_command · Web Research & Scripts', meta: '≈2.0k · Schema', payload: '{\n  "tools": ["web_search", "run_command"]\n}' },
+      { id: 'schema-wb-agent', stepIndex: -1, tokEst: 2100, tag: 'Schema', title: 'Agent · Parallel Research Sub-tasks', meta: '≈2.1k · Schema', payload: '{\n  "tools": ["Agent"]\n}' },
     ]
   }
   return [
