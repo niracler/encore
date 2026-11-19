@@ -582,6 +582,9 @@ test('timeline assigns adaptive playback speeds (1.0x / 12x / 0.8x) and renders 
   const html = renderPlayerWidget(richSession, line, { lang: 'zh' })
   assert.match(html, /security_audit/)
   assert.match(html, /查看报告/)
+  const english = timeline(richSession, { lang: 'en' })
+  assert.equal(english.steps[1].subagents[0].badge, 'Dispatched')
+  assert.equal(english.steps[1].subagents[1].badge, 'Returned')
 })
 
 test('standalone player bundle matches src modules and showcase session passes schema & leak checks', () => {
@@ -593,11 +596,11 @@ test('standalone player bundle matches src modules and showcase session passes s
   assert.equal(schema.$schema, 'https://json-schema.org/draft/2020-12/schema')
   assert.ok(schema.properties.tool.enum.includes('workbuddy'))
 
-  const siteSession = JSON.parse(readFileSync(join(repoRoot, 'site', 'session.json'), 'utf8'))
-  for (const reqKey of schema.required) {
-    assert.ok(siteSession[reqKey] !== undefined, `site/session.json missing required field: ${reqKey}`)
+  for (const id of ['ai-tree-1014', 'ai-tree-1015', 'lesson-00-buyers-codex', 'lesson-00-buyers-workbuddy']) {
+    const session = JSON.parse(readFileSync(join(repoRoot, 'site/demos', id, 'session.json'), 'utf8'))
+    for (const key of schema.required) assert.ok(session[key] !== undefined, `${id} missing ${key}`)
+    assert.equal(findLeaks(session).length, 0, `${id} must have zero privacy leaks`)
   }
-  assert.equal(findLeaks(siteSession).length, 0, 'site/session.json must have zero privacy leaks')
 })
 
 test('structured tool metadata (kind, file, skill) keeps right-hand context chips and doc previews intact after polishing summary', () => {

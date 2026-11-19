@@ -28,11 +28,19 @@
 
 ## 在线演示
 
-前往 **[encore.niracler.com](https://encore.niracler.com)** 直接体验 5 个覆盖全部支持 Agent 的真实回放（页面右上角支持一键切换中英文界面）：
+首页收录 4 段回放。《AI 七十年，长成一棵树》记录了从首版到定稿的视频制作过程，默认打开首版。另外两段记录了 Codex 和 WorkBuddy 如何完成同一项海外采购方调研。页面、播放器和案例导读支持中英文切换，对话保留原文。
 
 | 案例 | Agent | 看点 |
 | :--- | :--- | :--- |
-| [设计与发布 Encore](https://encore.niracler.com/) | **Codex** | 英文功能总览，完整呈现上下文透视、自动压缩与子 Agent 协作 |
+| [《AI 七十年》从构思到首版](https://encore.niracler.com/?lang=zh) | **Claude.ai** | 7 个子任务核对史实、准备讲稿，做出 4 分 10 秒的首版 |
+| [《AI 七十年》从反馈到定稿](https://encore.niracler.com/?demo=ai-tree-1015&lang=zh) | **Claude.ai** | 根据反馈修改照片与术语讲解，交付横竖两版 |
+| [海外照明采购方调研](https://encore.niracler.com/?demo=lesson-00-buyers-codex&lang=zh) | **Codex** | 分头调查德国、英国和澳大利亚市场，整理出 26 家潜在客户 |
+| [海外照明采购方调研](https://encore.niracler.com/?demo=lesson-00-buyers-workbuddy&lang=zh) | **WorkBuddy** | 重新分派 3 个因额度用尽而中断的任务，整理出 32 家潜在客户 |
+
+其他回放可通过直链打开。
+
+| 案例 | Agent | 看点 |
+| :--- | :--- | :--- |
 | [大改课程海报：三套视觉提案](https://encore.niracler.com/?demo=poster-redesign) | **Codex** | 7 张 `.webp` 视觉演进过程图，中途触发一次上下文自动压缩 |
 | [把新版七阶段图接入课件与站点](https://encore.niracler.com/?demo=work-stages-site) | **Claude Code** | 4 个子 Agent 协同、5 张过程截图，含现场定位并修复页面脚本故障 |
 | [嫌太难看，重做「七阶段图」](https://encore.niracler.com/?demo=work-stages-design) | **Claude.ai** | 网页导出包（`conversations.json`），探索 5 套版式方向与 9 张迭代稿 |

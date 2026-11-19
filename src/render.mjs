@@ -561,7 +561,7 @@ export function renderPlayerWidget(session, computedTimeline, {
             <div class="session-composer-bar">
               <span class="session-composer-left">
                 <span class="session-composer-plus" aria-hidden="true">+</span>
-                <span class="session-composer-perm" data-session-stage-badge>Workspace Write</span>
+                <span class="session-composer-perm" data-session-stage-badge>${escape(t('workspaceWrite'))}</span>
               </span>
               <span class="session-composer-right">
                 <span class="session-composer-model">${escape(session.model || tool)}</span>
