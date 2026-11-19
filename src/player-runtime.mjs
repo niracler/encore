@@ -1163,7 +1163,7 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
   })
 
   const onKeyDown = event => {
-    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
+    if (lightbox?.open || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
     if (event.target.closest('input, textarea, select, a, audio, video, summary, [contenteditable]')) return
     if (event.key === ' ' && event.target.closest('button')) return
     if (event.key === 'ArrowLeft') {
@@ -1179,9 +1179,8 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
     }
     event.preventDefault()
   }
-  if (typeof document !== 'undefined') {
-    document.addEventListener('keydown', onKeyDown)
-  }
+  if (!appEl.hasAttribute('tabindex')) appEl.tabIndex = -1
+  appEl.addEventListener('keydown', onKeyDown)
 
   if (scrubber) {
     const fromPointer = event => {
@@ -1211,9 +1210,7 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
     destroy() {
       clearStepAnimations()
       camera.stop()
-      if (typeof document !== 'undefined') {
-        document.removeEventListener('keydown', onKeyDown)
-      }
+      appEl.removeEventListener('keydown', onKeyDown)
     },
     goToStage,
     setPlaying,
