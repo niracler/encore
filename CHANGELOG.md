@@ -11,6 +11,10 @@ All notable changes to `@niracler/encore` will be documented in this file.
 - **CI & Governance**: Added GitHub Actions test matrix (`.github/workflows/ci.yml`), `AGENTS.md`, and bundle synchronization assertions.
 - **Interactive Session Picker Pagination**: Paginate recent local sessions (`←`/`→` or `h`/`l`) with on-demand log inspection.
 
+### Fixed
+- WorkBuddy replays use WorkBuddy's tool list when the log omits tool schemas.
+- Codex document previews keep each Markdown file in a multi-file patch separate, including files with the same name in different directories.
+
 ## [0.1.0] - 2026-11-17
 
 ### Added

@@ -8,9 +8,11 @@ import sharp from 'sharp'
 import {
   buildReplay,
   buildStandalonePlayerJs,
+  clipSession,
   createSessionPlaybackModel,
   detectInput,
   findLeaks,
+  readCodex,
   redactSession,
   renderPlayerWidget,
   scanRecentSessions,
@@ -365,6 +367,51 @@ test('timeline preserves reasoning-only turns, prevents negative token regressio
   assert.match(html, /<div class="session-tl-track-wrap" data-tl-track>\s*<span class="session-composer-progress"/, 'progress hairline should be inside track wrap for alignment')
 })
 
+test('Codex patch previews keep each Markdown document and its modal separate', () => {
+  const session = readCodex([{
+    type: 'response_item', timestamp: '2026-11-18T10:00:00Z', payload: {
+      type: 'custom_tool_call', name: 'apply_patch', call_id: 'patch-1',
+      input: [
+        '*** Begin Patch',
+        '*** Update File: en/README.md', '@@', '-# Old', '+# Hello', ' English body.',
+        '*** Update File: src/example.js', '@@', '+// no preview',
+        '*** Delete File: obsolete.md',
+        '*** Update File: draft.md', '*** Move to: zh/README.md', '@@', '+# 你好', '+中文正文。',
+        '*** Add File: notes.md', '+# Notes', '+A separate note.', '*** End Patch',
+      ].join('\r\n'),
+    },
+  }])
+  const line = timeline(session)
+  const docs = line.steps.flatMap(step => step.docs || [])
+  assert.deepEqual(docs.map(doc => [doc.file, doc.content]), [
+    ['README.md', '# Hello\nEnglish body.'],
+    ['README.md', '# 你好\n中文正文。'],
+    ['notes.md', '# Notes\nA separate note.'],
+  ])
+  assert.equal(new Set(docs.map(doc => doc.id)).size, docs.length)
+  const html = renderPlayerWidget(session, line)
+  for (const doc of docs) {
+    assert.ok(html.includes(`data-doc-open="${doc.id}"`))
+    assert.ok(html.includes(`data-doc-html="${doc.id}"`))
+  }
+})
+
+test('a clipped patch does not attach a later file to the last visible header', () => {
+  const input = [
+    '*** Begin Patch', '*** Add File: first.md', '+# First', '+' + 'a'.repeat(220),
+    '*** Add File: second.md', '+' + 'b'.repeat(220), '+# Second', '+Only in second.', '*** End Patch',
+  ].join('\n')
+  const session = clipSession({
+    tool: 'codex',
+    items: [{ type: 'tool', name: 'apply_patch', kind: 'edit', file: 'first.md', time: sampleSession.started, input }],
+  }, { input: 240 })
+  assert.ok(session.items[0].input.includes('Only in second.'))
+  assert.ok(!session.items[0].input.includes('second.md'))
+  const docs = timeline(session).steps.flatMap(step => step.docs || [])
+  assert.deepEqual(docs.map(doc => doc.title), ['First'])
+  assert.doesNotMatch(docs[0].content, /Second|Only in second/)
+})
+
 test('buildReplay auto-detects workbuddy logs and scanRecentSessions includes workbuddy projects', async () => {
   const tmp = mkdtempSync(join(tmpdir(), 'encore-wb-test-'))
   try {
@@ -445,6 +492,9 @@ test('buildReplay auto-detects workbuddy logs and scanRecentSessions includes wo
     const line = timeline(wbResult.session, { lang: 'zh' })
     const sysCat = line.steps[0].contextSnapshot.categories.find(c => c.id === 'sys')
     assert.ok(sysCat.items.some(item => /WorkBuddy/.test(item.title)))
+    const schema = line.steps[0].contextSnapshot.categories.find(c => c.id === 'schema')
+    const tools = schema.items.flatMap(item => JSON.parse(item.payload).tools || [])
+    assert.deepEqual(tools.sort(), ['Agent', 'edit_file', 'list_dir', 'read_file', 'run_command', 'web_search', 'write_file'])
 
     const customHtml = renderPlayerWidget(wbResult.session, line, {
       lang: 'zh',
