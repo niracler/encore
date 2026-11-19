@@ -6549,9 +6549,11 @@
   "description": "朋友看过首版后提出了修改意见。这一轮补上历史照片，把屏幕上的术语计数改成词汇本，最后交付 5 分 14 秒的横屏和竖屏成片。",
   "deliverables": [
     {
-      "title": "观看《AI 七十年，长成一棵树》",
-      "href": "https://ai-literacy-series.pages.dev/videos/ai-tree/",
-      "meta": "5 分 14 秒 · 横屏与竖屏"
+      "title": "《AI 七十年，长成一棵树》",
+      "href": "landscape.mp4",
+      "cover": "landscape.webp",
+      "portrait": { "href": "portrait.mp4", "cover": "portrait.webp" },
+      "meta": "5 分 14 秒"
     }
   ]
 }
