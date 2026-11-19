@@ -1,0 +1,231 @@
+{
+  "tool": "workbuddy",
+  "model": "glm-5.3",
+  "title": "用横纵分析法研究开源工具 x-cmd",
+  "started": "2026-10-10T07:20:41.711Z",
+  "ended": "2026-10-10T07:38:57.309Z",
+  "tokens": 708391,
+  "items": [
+    {
+      "type": "user",
+      "text": "用横纵分析法研究 x-cmd 这家公司（官网：https://x-cmd.com/）。\n要求：\n1. 只用公开信息。每个关键事实附来源链接；找不到的写「找不到」，不要推测，也不要补全。\n2. 用中文写，产出 PDF 报告。\n补充背景：这位候选人应聘的是我们的 Node.js 开发岗位。请结合这份报告，说明他在 x-cmd 的经历和这个岗位有哪些关系，面试时值得重点了解什么。",
+      "time": "2026-10-10T07:20:41.711Z"
+    },
+    {
+      "type": "reasoning",
+      "text": "The user wants an HV analysis (horizontal-vertical analysis) of x-cmd, using the hv-analysis skill. Also they mention \"这位候选人\" — a candidate applying for a Node.js position who worked at x-cmd. Wait, but the query says \"研究 x-cmd 这家公司\", and then \"结合这份报告，说明他在 x-cmd 的经历和这个岗位有哪些关系\" — but we don't have the candidate's info. Hmm, the user says \"这位候选人应聘的是我们的 Node.js 开发岗位\" — presumably a candidate who worked at x-cmd. We only have public info about x-cmd; the candidate's specific role isn't given. We should note we don't have candidate-specific info, and analyze what x-cmd experience generally implies for Node.js roles.\n\nI should load the hv-analysis skill first, then research x-cmd via web, then produce a PDF report. PDF generation — there's a pdf skill. Chinese PDF. Let me load hv-analysis skill first.",
+      "time": "2026-10-10T07:20:54.521Z"
+    },
+    {
+      "type": "tool",
+      "name": "Skill",
+      "summary": "加载技能 hv-analysis",
+      "input": "{\n  \"args\": \"研究 x-cmd（https://x-cmd.com/），结合 Node.js 岗位候选人背景，产出中文 PDF 报告\",\n  \"skill\": \"hv-analysis\"\n}",
+      "stats": {
+        "skill": 1
+      },
+      "time": "2026-10-10T07:20:54.525Z",
+      "done": "2026-10-10T07:20:54.608Z",
+      "output": "Base directory for this skill: ~/.workbuddy/skills/hv-analysis\n# 横纵分析法深度研究\n\n> **方法论溯源**\n> 横纵分析法由数字生命卡兹克（Khazix）提出，融合了语言学中的历时-共时分析（Saussure）、社会科学中的纵向-横截面研究设计、商学院案例研究法、以及竞争战略分析的核心思想，形成了一套适用于产品/公司/概念/人物的通用研究框架。核心原则不变：纵向追时间深度，横向追同期广度，最终交汇出判断。\n\n你正在执行一次横纵分析法深度研究。最终产出一份**排版精美的PDF研究报告**。\n\n## 前置准备\n\n### 环境准备\n\n1. **确认PDF转换脚本可用**：本Skill自带 `scripts/md_to_pdf.py`（基于WeasyPrint），用于将最终Markdown报告转为排版精美的PDF。确保依赖已安装：`pip install weasyprint markdown --break-system-packages`。\n2. **写作风格**：本Skill已内置完整的写作风格指南（见下文\"写作风格\"部分），无需额外加载其他skill。\n\n### 明确研究对象\n\n拿到用户输入后，确认以下信息。如果用户已经给得足够明确（比如\"帮我用横纵分析法研究Hermes Agent\"），不需要追问，直接开始：\n\n1. **研究对象**：具体的产品名/公司名/概念名/人名\n2. **类型**：产品、公司、概念、人物、还是其他？\n3. **研究动机**（可选）：为什么要研究它？最近发生了什么？\n4. **特别关注点**（可选）：有没有特别想深入的方向？\n\n---\n\n## 第一步：联网信息收集\n\n这个方法论的质量完全取决于信息的丰富度和准确性。**必须联网搜索**，不能仅靠已有知识。研究报告的价值在于深度和完整度，所以信息收集阶段宁可多搜，不要因为信息不够导致后面的分析浮于表面。\n\n### 并行搜索策略\n\n使用子Agent并行搜索来提高效率。建议的分工：\n\n- **子Agent 1 — 纵向信息**：研究对象的起源、创始人背景、发展历程、关键事件、版本迭代、融资、战略转向、危机\n- **子Agent 2 — 横向信息**：竞品识别、各竞品的特点和用户口碑、行业对比评测、市场份额\n- **子Agent 3**（复杂对象才需要）：补充信息，如创始人深度背景、行业环境变化、用户社区讨论（GitHub issues、Reddit、Twitter/X、知乎等）\n\n**子Agent联网工具使用指南**（直接写入每个子Agent的prompt中）：\n\n每个子Agent的prompt中必须包含以下联网指引：\n\n> 你需要联网获取信息。使用以下工具：\n> - **WebSearch**：用于搜索发现信息来源，获取摘要和关键词结果\n> - **WebFetch**：当已知具体URL时，用于从页面定向提取内容\n> - 如果用户环境中安装了 web-access skill（检查路径 `/mnt/.claude/skills/web-access/SKILL.md` 是否存在），优先加载它并遵循其指引，它提供更强的浏览器CDP能力\n> - 搜索策略：先用WebSearch发现信息来源和线索，找到具体URL后用WebFetch深入提取\n> - 多次搜索、多个关键词组合，不要只搜一次就放弃\n> - 一手来源优于二手来源：官方博客 > 权威媒体原创报道 > 转载/聚合\n> - **学术类研究对象必查arxiv**\n\n…（中间省略 6670 字）…\n\ndf --title \"标题\" --author \"作者\"\n```\n\n- weasyprint 70.0 与 markdown 已装在托管 venv：`~/.workbuddy/binaries/python/envs/default`\n- `DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib` 用于让 weasyprint 找到 Homebrew 的 gobject/pango 库，缺它会报 `cannot load library 'libgobject-2.0-0'`\n- CSS 字体 fallback 链为 `\"Droid Sans Fallback\", Helvetica, Arial, sans-serif`，本机无 Droid Sans Fallback 时会退到 Helvetica，中文渲染正常但可按需替换为 `PingFang SC`",
+      "omitted": 6670
+    },
+    {
+      "type": "reasoning",
+      "text": "Let me plan: research x-cmd (a company/project). x-cmd is an open-source CLI tool — \"x-cmd\" is a POSIX-compliant shell-based package manager / command toolbox (x-cmd.com). Need public info with sources. Also need to relate to a Node.js developer candidate who worked at x-cmd. I don't have candidate-specific info; I should analyze what x-cmd work implies for Node.js roles and interview questions, noting that candidate-specific details (role, duration) aren't provided.\n\nLaunch parallel research subagents. Per skill: Agent 1 vertical (origin, founder, history, releases), Agent 2 horizontal (competitors: oh-my-zsh, Homebrew, nushell?, atuin, zoxide, fzf, etc.), Agent 3 supplementary (community discussion, GitHub, founder background — the founder is 刘光启? I recall x-cmd founder is \"edwinjh? \" Not sure. Need research).\n\nLet me spawn 3 subagents in parallel with web access. Use general-purpose subagent type (has WebSearch/WebFetch).",
+      "time": "2026-10-10T07:21:36.007Z"
+    },
+    {
+      "type": "assistant",
+      "text": "收到。我先按横纵分析法做联网信息收集（并行三路：纵向历程、横向竞品、社区口碑与创始人背景），再写报告并生成 PDF。",
+      "time": "2026-10-10T07:21:36.018Z"
+    },
+    {
+      "type": "tool",
+      "name": "Agent",
+      "summary": "派出子任务：调研 x-cmd 纵向历史",
+      "input": "你需要联网获取关于 x-cmd（官网 https://x-cmd.com/，GitHub: https://github.com/x-cmd/x-cmd）的纵向历史信息，用于撰写一份深度研究报告。只使用公开信息，每个关键事实必须记录来源 URL。找不到的信息明确标注「找不到」，绝不推测。\n\n联网工具使用指南：\n- 使用 WebSearch 搜索发现信息来源\n- 使用 WebFetch 从具体 URL 定向提取内容\n- 多次搜索、多个关键词组合（中英文都试：如 \"x-cmd 创始人\"、\"x-cmd history\"、\"x-cmd 刘光启\"、\"x-cmd release\"、\"x-cmd 公司\"、\"x-cmd 融资\"）\n- 一手来源优于二手来源：官方博客/GitHub Release Notes/创始人推文优先\n\n需要收集的信息：\n1. x-cmd 是什么：产品定位、核心理念（官方描述）、主要功能模块（pkg 包管理、交互式工具等）\n2. 起源：首次发布时间、最初形态、诞生背景、解决什么问题\n3. 创始人/核心团队：是谁、背景（之前做过什么）、有没有公开的访谈/博客/演讲\n4. 背后的公司实体：公司名称、注册地、成立时间、规模、是否融资（这些信息可能找不到，找不到就标注找不到）\n5. 发展历程关键节点：主要版本迭代（从 GitHub releases 提取）、用户规模里程碑（GitHub stars 随时间变化）、重大功能上线、战略转向\n6. 商业模式：开源协议、有没有商业化尝试（付费功能、企业版）\n7. 技术架构：POSIX shell 实现、零依赖、Mod 工具包等设计决策及其原因\n\n建议入手点：\n- WebFetch https://x-cmd.com/ 首页\n- WebFetch https://x-cmd.com/docs/ 文档区\n- GitHub repo 的 README、releases 页面（https://github.com/x-cmd/x-cmd/releases）\n- star-history.com 数据\n- 搜索 V2EX、知乎、掘金、HN（news.ycombinator.com）上的讨论帖\n\n输出格式：按上述主题组织的事实清单，每条事实后面附来源 URL。事实要具体（带数字、日期、版本号），不要泛泛而谈。",
+      "stats": {
+        "agent": 1
+      },
+      "agent": "调研 x-cmd 纵向历史",
+      "time": "2026-10-10T07:21:36.022Z",
+      "done": "2026-10-10T07:30:34.572Z",
+      "output": "# x-cmd 纵向历史调研：带来源的事实清单\n\n## 1. x-cmd 是什么\n\n**产品定位与核心理念**\n- 官网首页口号：\"The First Agent-Native Shell Toolbox\"、\"All AI Builder need, is X-CMD\"。来源：https://x-cmd.com/\n- GitHub repo 描述：\"Shell Superpowers for AI Agents\"。来源：https://github.com/x-cmd/x-cmd\n- README 官方定义：\"X-CMD is a modern toolkit for POSIX shell (bash, zsh, ash, dash) — designed to make shell as powerful as Python's standard library\"。起源问题：\"What if shell had a standard library as powerful as Python's?\"。来源：https://github.com/x-cmd/x-cmd\n- 核心自述演进（README \"Our Journey\" 五阶段）：① Shell 标准库（300+ shell/awk 模块）→ ② 按需包系统 pkg（600+ CLI 工具）→ ③ 多样模块（theme/advise/githook/free/ccal/weixin）→ ④ AI-Native Shell（ChatGPT 时代起，shell+curl 访问 OpenAI/Gemini/DeepSeek 等）→ ⑤ 为 Agent 优化（\"After 5 years, we discovered shell's sweet spot: AI agents\"）。来源：https://github.com/x-cmd/x-cmd\n\n**主要功能模块**\n- 官网首页展示 \"488+ modules\"，重点模块：`x pkg`（包管理器）、`x repo`、`x abox`（AI Agent Docker 容器管理）、`x skill0`、`x mac`、`x theme`、`x claw`（监听微信/飞书/Telegram 消息唤醒本地 AI Agent）、`x skill`（给 Claude Code/Codex/Kimi 装技能）。来源：https://x-cmd.com/\n- README：300+ 模块（shell/awk 库）+ 600+ 包（策展 CLI 工具）；\"Essential tools for AI Agents: 2363+ tools\"。来源：https://github.com/x-cmd/x-cmd\n- 公司页称 \"1600+ 预配置应用工具\"。来源：https://cn.x-cmd.com/about\n- 轻量指标：核心 ~1.1 MB；非交互加载 <20ms，交互 <60ms；纯 shell agent <2MB，官方称能力对标 OpenClaw 和 Claude Code。来源：https://github.com/x-cmd/x-cmd\n- 安装方式：`eval \"$(curl https://get.x-cmd.com)\"`。来源：https://x-cmd.com/\n\n## 2. 起源\n\n- 官方：\"X-CMD 开发团队成立于 2021 年，致力于 X-CMD 的开发和生态建设\"。来源：https://www.x-cmd.com/start/support-us\n- 前身项目 2018 年启动，技术选型历程（官方原文）：2018~2019 TypeScript（类似 npx）→ 2020 Golang（为启动效率）→ 2020 C/Rust（为体积和启动效率）→ 2021 Bash（**合并 x-bash 项目**）→ 现今 POSIX-SHELL（\"经过多次重写和比较才最终确定\"）。来源：https://www.x-cmd.com/start/support-us\n- 前身 x-bash 组织确实存在：github.com/x-bash 有 29 个仓库；x-bash/x-bash 主仓库 538 commits，最早文件 2021-01-31（.gitignore），最后 commit 2021-10-01；x-bash/xcmd 仓库活跃于 2021-08~10。来源：https://github.com/x-bash 、https://github.com/x-bash/x-bash\n- GitHub 仓库 x-cmd/x-cmd 创建于 **2022-10-01T08:46:39Z**；2022 年底前已有提交（2022-12-22）。来源：GitHub API `repos/x-cmd/x-cmd`（可通过 `gh api` 复核）\n- 诞生动机（创始人自述，HN 回帖）：\"As a former operation engineer... installing a simple tool, like jq, on a client's server required unnecessary sudo privileges... some software installations demanded extensive dependency upgrades, potentially destabilizing the entire system. To address this, I developed x-cmd/pkg\"。来源：https://news.ycombinator.com/item?id=40742722\n- 早期形态（2023 年今日头条报道）：\"这个项目目前还在内测\"，\"包括全功能模块安装包体积不超过 500KB，首启后 shell 的加载时间一般不超过 100ms\"。来源：https://www.toutiao.com/article/7221055201203978813\n- 早期 Gitee 描述（v0.3.4 tag 页）：\"One command to bootstrap lightweight 200+ shell tools and 500+ portable packages\"。来源：https://gitee.com/x-cmd/x-cmd/tree/v0.3.4\n- tmux 模块\"最初开发于 2022 年\"，内部打磨两年后于 v0.7.14（2026-01）开源。来源：https://cn.x-cmd.com/blog/260131/\n\n## 3. 创始人/核心团队\n\n- 创始人 & CEO：**李均豪（Li Junhao）**，GitHub 账号 `edwinjhlee`（Edwin.JH.Lee，个人博客 ljh.sh，company 标注 @x-cmd，账号注册 2013-05-14），HN 用户名 `lijunhao`。来源：https://cn.x-cmd.com/about 、GitHub API `users/edwinjhlee`、https://news.ycombinator.com/item?id=40742722\n- 背景（公司官方介绍）：前 Oracle 云计算部门高级开发工程师（负责企业级分布式日志审计系统研发）；后任深圳多翼创新 CTO；\"全球少有的 POSIX Shell 跨系统开发专家\"。来源：https://cn.x-cmd.com/about 及奇绩创坛 2025 项目知识库（https://ima.qq.com/wiki/?shareId=eb7b83c5bee5fcfbe1a805fd1be53b2e9dec4a56a06d288f4e7ec02d19322789）\n- 在 Oracle/多翼创新的具体任职年份：**找不到**\n- GitHub org 公开成员：edwinjhlee（李均豪）、Zhengqbbb。来源：GitHub API `orgs/x-cmd/public_members`\n- 公开内容输出：CSDN 博客（如 2025-09-18《[x-cmd] 入门指南》）、官网博客文章署名\"李均豪 X-CMD 创始人 & CEO\"、HN 回帖、B站/YouTube 视频号。来源：https://blog.csdn.net/edwinjhlee/article/details/151821115 、https://cn.x-cmd.com/mod/hub/cookbook-1/ 、https://www.x-cmd.com/start/support-us\n- 团队规模具体人数：**找不到**\n- 用户提到的\"刘光启\"：所有公开信息中均未出现此人名，与 x-cmd 无关联证据：**找不到**\n\n## 4. 背后的公司实体\n\n- 公司：**中山市栩栩云生科技有限公司**（Zhongshan Xuxuyunsheng Technology Co., Ltd.），成立于 **2021 年**，总部广东省中山市（粤港澳大湾区）。来源：https://cn.x-cmd.com/about\n- 使命：\"重塑人、AI 与机器的交互方式\"，专注系统软件与开发者工具。来源：https://cn.x-cmd.com/about\n- 融资：**2025 年 12 月获奇绩创坛（MiraclePlus）天使轮投资**；创始人参加奇绩创坛 F25 Demo Day 路演（2025.12.7）。来源：https://cn.x-cmd.com/blog/251211/ 、https://www.x-cmd.com/blog/251211\n- 融资金额与投后估值：**找不到**\n- 其他资质：已获软件著作权；Gitee 最有价值开源项目（GVP）认证；GitCode G-Star 项目毕业。来源：https://cn.x-cmd.com/about\n- 员工规模：**找不到**（公司介绍仅称\"核心团队来自国内外知名科技企业\"）\n\n## 5. 发展历程关键节点\n\n**时间线（含版本号）**\n- 2018：前身项目开始（TypeScript）。来源：https://www.x-cmd.com/start/support-us\n- 2021：团队成立；合并 x-bash 项目。来源：https://www.x-cmd.com/start/support-us\n- 2021-01~10：x-bash org 活跃期。来源：https://github.com/x-bash\n- 2022-10-01：GitHub 仓库创建。来源：GitHub API\n\n\n…（中间省略 4612 字）…\n\nigs (MIT)。来源：https://deepwiki.com/x-cmd/x-cmd/7-license-and-legal\n\n## 附：社区讨论与第三方评价\n\n- HN 2024-06-20（17 pts）：有用户批评 `x install` 聚合 `curl | sh` 式安装命令的设计（\"a terrible idea\"），创始人 lijunhao 长文回应\"自由选择\"哲学。来源：https://news.ycombinator.com/item?id=40742722\n- HN 2025-08-17（22 pts）：负面居多——\"looks like it's mostly machine translated\"、\"GitHub repository itself appears to mostly contain scaffolding\"、\"Doesn't pass the smell test\"、有用户建议改用 nix。来源：https://news.ycombinator.com/item?id=44928937\n- 官网展示的正面推荐：Shodan 官方、How-To Geek、Terminal Trove、jsDelivr 创始人 Dmitriy Akulov（称 x-cmd 帮 Globalping 触达新用户群）等。来源：https://x-cmd.com/\n- 中文社区第三方报道：今日头条（2023）、hqyman.cn（两篇）、zeroxin.xin（2025-11）、LinuxLinks 收录。来源：见上文各 URL\n- V2EX / 知乎 / 掘金的具体讨论帖：本次多组关键词搜索**未命中可引用的帖子 URL**（搜索引擎仅返回 V2EX 首页），标注「找不到」\n\n## 明确标注「找不到」的信息汇总\n\n| 信息项 | 状态 |\n|---|---|\n| 天使轮融资金额/投后估值 | 找不到 |\n| 团队/公司人员规模 | 找不到 |\n| 用户规模（下载量、活跃用户） | 找不到 |\n| 创始人在 Oracle/多翼创新的任职年份 | 找不到 |\n| 2026-04-18 之前各 release 的原始发布日期（被批量重发覆盖） | 找不到 |\n| 逐月 star 增长完整曲线 | 找不到（仅零散数据点） |\n| \"刘光启\" 与 x-cmd 的关联 | 找不到（公开信息中创始人始终为李均豪） |\n| V2EX/知乎/掘金具体讨论帖 URL | 找不到 |\n\n调研共覆盖官网（中/繁/英三语站）、GitHub API（repo/releases/commits/org/tags）、官方博客、HN（Algolia API）、第三方博客与媒体报道，全部为公开信息。\n\n[Agent ID: agent-40d9b4321bfd491a]",
+      "omitted": 4612
+    },
+    {
+      "type": "tool",
+      "name": "Agent",
+      "summary": "派出子任务：调研 x-cmd 横向竞品",
+      "input": "你需要联网获取关于 x-cmd（官网 https://x-cmd.com/，一个基于 POSIX shell 的命令行工具集/包管理器）及其竞品的横向对比信息，用于撰写深度研究报告。只使用公开信息，每个关键事实必须记录来源 URL。找不到的明确标注「找不到」，不要推测。\n\n联网工具使用指南：\n- 使用 WebSearch 搜索发现信息来源\n- 使用 WebFetch 从具体 URL 定向提取内容\n- 中英文关键词都试：\"x-cmd vs homebrew\"、\"x-cmd 对比\"、\"x-cmd review\"、\"x-cmd alternatives\"、\"x-cmd 知乎\"、\"x-cmd v2ex\"\n\n需要收集的信息：\n1. x-cmd 自己定位的竞品/参照物是什么（官方文档里怎么说）\n2. 主要竞品识别。x-cmd 是「命令行增强工具集 + 轻量包管理器」，候选竞品可能包括：\n   - 包管理器：Homebrew、apt、nix、aqua、mise/asdf（版本管理）、pkgsrc\n   - Shell 增强/工具集：oh-my-zsh、zimfw、starship、atuin、fzf、zoxide、modern-unix 工具集\n   - 一次性脚本运行器：npx、bunx、cargo run、curl|sh 模式\n   请确认哪些是真正意义上的竞品，哪些只是相邻物种\n3. 每个主要竞品：定位、用户规模（GitHub stars/装机量）、核心优势、明显短板、用户口碑\n4. x-cmd 在各竞品对比中的差异化卖点（零依赖、POSIX 兼容、单文件安装等）\n5. 社区真实口碑：V2EX、知乎、Reddit、Hacker News、GitHub issues 里用户怎么评价 x-cmd？被称赞最多的是什么、被吐槽最多的是什么（比如「套壳」争议、安全性、安装方式侵入性等）\n6. 赛道格局：这个领域是百花齐放还是一家独大？x-cmd 占据什么生态位？\n\n输出格式：按主题组织的事实清单，每条附来源 URL。事实要具体，带数字（stars 数、装机量等）。特别留意真实用户的第一手评价（引用原文），不要只收集官方宣传。",
+      "stats": {
+        "agent": 1
+      },
+      "agent": "调研 x-cmd 横向竞品",
+      "time": "2026-10-10T07:21:36.030Z",
+      "done": "2026-10-10T07:30:34.580Z",
+      "output": "调研完成。共收集约 40 条带来源 URL 的事实，覆盖官方定位、6 个真竞品档案（含实时 stars 数据）、HN 第一手正负面引文、以及 V2EX/Reddit/知乎的「找不到」标注。核心结论：x-cmd 真正的竞品是 aqua/pkgx 这类免 root 便携包管理器与 nix run，而 Homebrew/mise/oh-my-zsh 属相邻物种；其差异化（零依赖 POSIX、1.1MB、免 root）在 HN 等英文社区遭遇的主要质疑是“命令间接层”与“curl|sh 安全模型”，中文社区则缺乏独立批判性讨论；当前破局叙事已全面转向 AI Agent 生态位。\n\n[Agent ID: agent-cb24f3f59b334854]"
+    },
+    {
+      "type": "tool",
+      "name": "Agent",
+      "summary": "派出子任务：调研 x-cmd 团队与社区口碑",
+      "input": "你需要联网获取关于 x-cmd 项目（官网 https://x-cmd.com/，GitHub: https://github.com/x-cmd/x-cmd）的补充信息：团队构成、工程文化、社区生态、以及它对开发者的技术能力要求。只使用公开信息，每个关键事实必须记录来源 URL。找不到的明确标注「找不到」，不要推测。这些信息将用于评估一位曾在 x-cmd 工作过的开发者候选人应聘 Node.js 岗位的匹配度。\n\n联网工具使用指南：\n- 使用 WebSearch 搜索、WebFetch 定向提取\n- 中英文关键词组合：\"x-cmd 团队\"、\"x-cmd 招聘\"、\"x-cmd jobs\"、\"x-cmd hiring\"、\"x-cmd 贡献者\"、\"x-cmd contributors\"、\"x-cmd 面试\"、\"x-cmd engineering\"、\"x-cmd npm\"、\"x-cmd node\"\n\n需要收集的信息：\n1. 团队与贡献者：GitHub contributors 页面（https://github.com/x-cmd/x-cmd/graphs/contributors）显示的主要贡献者有哪些、贡献量分布（是单人项目还是团队项目？）\n2. 招聘信息：x-cmd 有没有公开发布过招聘（岗位类型、技术栈要求）？官网/拉勾/BOSS直聘等有没有痕迹？\n3. x-cmd 与 Node.js/JavaScript 生态的关系（重点）：\n   - x-cmd 的 pkg 能不能安装/管理 Node.js、npm 包？（搜索 x-cmd node、x-cmd npm 相关文档）\n   - x-cmd 仓库里有没有 JavaScript/Node.js 代码？它和 npm/npx 的关系（官方是否提到对标 npx）\n   - x-cmd 有没有发布过 npm 包（在 npmjs.com 搜 x-cmd）\n4. 工程实践：x-cmd 的 CI/CD、测试、代码规范（从 GitHub repo 观察到的：tests 目录、GitHub Actions 等）\n5. 社区运营：官方群（微信/QQ/TG）、文档质量、更新频率（最近一次 release 时间、发布节奏）\n6. 创始人/核心成员的公开技术输出：博客、演讲、GitHub 个人页背景\n7. x-cmd 的模块体系（x-cmd mod）里有没有 JS/TS 相关模块\n\n输出格式：按主题组织的事实清单，每条附来源 URL。事实要具体。找不到的要诚实标注。",
+      "stats": {
+        "agent": 1
+      },
+      "agent": "调研 x-cmd 团队与社区口碑",
+      "time": "2026-10-10T07:21:36.042Z",
+      "done": "2026-10-10T07:30:34.583Z",
+      "output": "# x-cmd 项目调研事实清单\n\n数据采集时间：2026-10-10。主要来源：GitHub API（gh api 实时抓取）、x-cmd.com 官网、npmjs.com、个人博客。\n\n---\n\n## 1. 团队与贡献者\n\n- GitHub 公开贡献者共 8 人，贡献量高度集中：**edwinjhlee 655 次、Zhengqbbb 12 次、qiakai 11 次、mnnna 3 次、ljh-zs 2 次、x-cmd-root 2 次、jerry8hero 1 次、sclevenger7777 1 次**。本质上是**创始人主导的单人核心项目**，非典型团队工程。\n  来源：https://github.com/x-cmd/x-cmd/graphs/contributors（经 GitHub API `repos/x-cmd/x-cmd/contributors` 核实）\n- GitHub org 公开成员仅 2 人：**edwinjhlee、Zhengqbbb**（org 描述 \"Excalibur in Cloud\"，创建于 2021-03，58 个公开仓库）。\n  来源：https://github.com/x-cmd（API `orgs/x-cmd/members`、`orgs/x-cmd`）\n- 官网 About Us 页面列出 4 人：**Edwin Lee（Founder & CEO）、Zhuang Zhuang、Tian Tong、Hui Hui（均标注 Core Team Member）**——后三人为昵称，无法对应 GitHub 账号。\n  来源：https://x-cmd.com/about\n- 公司主体：**中山市栩栩雲生科技有限公司**（XXYS Technology），地址「广东省中山市西区彩虹大道 9 号嘉华互联网中心 702 室」，邮箱 [邮箱]。公司定位为「开发者基础设施提供商」。\n  来源：https://hk.x-cmd.com/about\n- 团队成员 Zhengqbbb（Q.Ben Zheng / Qiubin Zheng，GitHub 资料标注 company: @x-cmd，坐标深圳）：**知名 npm 生态项目 cz-git / czg 的作者**（TypeScript 编写，1.5k+ stars，czg 被 Nx、Element Plus、TDesign 等项目使用，月下载约 22 万）。这是团队中最强的 Node.js/TS 信号。\n  来源：https://github.com/Zhengqbbb 、https://www.npmjs.com/package/czg 、https://pkgstats.com/pkg:cz-git\n- npm 发布账号 **lunrenyi** 发布了大量 @x-cmd-pkg/* 包（见第 3 节），但 GitHub 资料未标注 x-cmd，是否为团队成员**无法确认**。\n  来源：https://www.npmjs.com/~lunrenyi\n- 第三方博客（2025-11）称「6 名核心维护者、93 个版本」。此为第三方说法，与 GitHub 贡献数据（实质单人主导）有出入。\n  来源：https://www.zeroxin.xin/2025/11/09/x-cmd-introduction\n\n## 2. 招聘信息\n\n- **找不到**任何公开招聘信息。官网、博客、GitHub 均无 careers/jobs/加入我们 页面；搜索引擎中「x-cmd 招聘」无有效结果；未发现拉勾/BOSS直聘痕迹（无法直接访问这两个平台验证，但公开网络无索引记录）。官网仅有商业化入口（付费咨询/企业支持/Hub 定价）。\n  来源：https://x-cmd.com/ 、https://www.x-cmd.com/support/ （均无招聘栏目）\n\n## 3. x-cmd 与 Node.js / JavaScript 生态的关系（重点）\n\n- **可以安装管理 Node.js**：`x env use node` / `x env try node` 安装并切换 Node.js 版本（跨平台、免 sudo），pkg 体系由 env 模块驱动；当前收录 node 稳定版 v24.14.1，支持 Linux/Darwin/Windows × x64/ARM64。\n  来源：https://x-cmd.com/pkg/node 、https://clawhub.ai/lunrenyi/x-env\n- **有专门的 npm / npx 模块**（`x npm`、`x npx`）。官方文档明确：`x npx` = \"Run a command from a local or remote npm package\"，**\"Extends 'npx' command options\"**——即对标/增强 npx。源码显示 npx 模块是包装器：检测 Node 是否存在，缺失时交互引导用户 `x env use node` 安装，再转交原生 npx 执行。\n  来源：https://www.x-cmd.com/mod/npx 、仓库 `mod/npx/lib/main`（GitHub API 核实）\n- `x npm` 模块官方定义为 \"Node package manager\"，含 install/nv/ddgo 等子命令文件。\n  来源：https://www.x-cmd.com/mod/npm 、仓库 `mod/npm/lib/` 目录\n- **官方在 npmjs.com 发布了大量包**，scope 为 `@x-cmd-pkg/*`（含 node、bun、fzf、gh、nvim、uv、yq、lazygit 等，版本号格式如 `0.0.0-v24.14.1-win.x64.0`，是二进制分发包），另有 `@x-cmd-cosmo/cosmos`（edwinjhlee 发布）。发布者：lunrenyi、edwinjhlee。\n  来源：https://www.npmjs.com/search?q=x-cmd 、https://www.npmjs.com/package/@x-cmd-pkg/node\n- **仓库内 JS/TS 代码极少**：语言构成为 Awk 1.62MB、Shell 188KB、Python 138KB、**TypeScript 40KB、JavaScript 8KB**（JS+TS 合计约占 2.5%）。全仓库 7837 个文件中仅 **11 个 .js/.ts 文件**（如 `mod/ondb/lib/js/*.js`、`mod/html/lib/deno/clean.ts`、`mod/eget/lib/ts/AssetReport.ts`）。x-cmd 本体是 **POSIX Shell + Awk** 项目。\n  来源：GitHub API `repos/x-cmd/x-cmd/languages`、`git/trees/main?recursive=1`\n- 模块体系（397 个模块）中的 JS/TS 相关模块：**node、npm、npx、jsr（JSR 注册表）、bun、deno、html、web**，另有 weixin（微信 CLI 集成）。注意：`co` 模块现为 **AI copilot**（源码注释 \"co is for copilot\"），并非 npm 相关。\n  来源：GitHub API `repos/x-cmd/x-cmd/contents/mod`、`mod/co/lib/main`\n- 官方博客持续跟进 npm 生态动态（如「npm Supply Chain Poisoning — axios 后门事件」分析文章，2026-04）。\n  来源：https://www.x-cmd.com/blog/260401\n\n## 4. 工程实践（从 GitHub 仓库观察）\n\n- **CI/CD 高度自动化**：`.github/workflows/` 有 6 个工作流（apply-release、create-x-cmd-release、fabu-x-cmd-readme、fabu-x-cmd、sync、update-x-cmd-release-package），release 由 github-actions bot 自动发布，且使用自家 `x-cmd/action` 执行 `x ws apply-release`（用 x-cmd 管理自身发布流程，dogfooding）。\n  来源：GitHub API `contents/.github/workflows`（https://github.com/x-cmd/x-cmd/tree/main/.github/workflows）\n- **测试痕迹薄弱**：全仓库仅 5 个 test 目录（mod/dns、mod/rule、mod/scotty、mod/tailer、mod/version 下的 lib/test）和 1 个 `mod/awk/lib/testcase.awk`；**未发现运行测试的 CI 工作流**（工作流全部为发布/同步用途）。\n  来源：GitHub API `git/trees/main?recursive=1`\n- **代码规范**：shell 代码带 shellcheck 指令（如 `# shellcheck shell=dash`），说明使用 shellcheck 检查；仓库含 CODE_OF_CONDUCT.md、SECURITY.md、NOTICE.md、LICENSES 目录（Apache-2.0）。\n  来源：仓库根目录（GitHub API `contents/`）、`mod/npx/lib/main`\n- 仓库基础数据：**4705 stars、172 forks**，创建于 2022-10-01，最后推送 2026-10-08（高度活跃），开放 issues 111。\n  来源：GitHub API `repos/x-cmd/x-cmd`（https://github.com/x-cmd/x-cmd）\n\n## 5. 社区运营与发布节奏\n\n- **发布节奏快且持续**：最近 5 个 release 为 v0.10.8（2026-09-02）→ v0.10.12（2026-09-24），约每周一个；官方博客几乎每日更新（技术文章 + 每版本发版说明）。\n  来源：GitHub API `releases`、https://www.x-cmd.com/blog/\n- **社区群为微信体系**：企业微信群（扫码加小助手验证\n\n…（中间省略 375 字）…\n\nd.com/support/\n- 文档质量：488 个模块均有官网文档页 + llms.txt（面向 AI agent 的入口）+ Changelog，第三方用户评价普遍称赞文档可读性。\n  来源：https://www.x-cmd.com/mod/ 、https://github.com/x-cmd/x-cmd （README 用户推荐语）\n\n## 6. 创始人/核心成员公开技术输出\n\n- **李俊豪（Edwin Lee / edwinjhlee / Li Junhao）**，x-cmd 与栩栩雲生创始人，坐标广东中山。职业经历：**Oracle 高级软件工程师**（企业级分布式日志审计系统）→ **多益创新 CTO（深圳）**（从零组建团队）。技术标签：POSIX Shell 跨平台开发、系统架构、分布式系统、容灾设计。个人博客 ljh.sh；另有个人项目 macli（Swift，macOS 工具）、roff（Rust，man 页转换器）。\n  来源：https://ljh.sh 、https://github.com/edwinjhlee\n- 核心贡献者 Zhengqbbb 的输出见第 1 节（cz-git/czg，TypeScript/npm）。\n- **未发现**创始人或核心成员的公开演讲/会议分享记录（**找不到**）。\n\n## 7. 对该岗位匹配度评估的关键结论（基于以上事实）\n\n- **技术栈不匹配风险高**：x-cmd 主体是 Awk + POSIX Shell（约 85% 代码量），JS/TS 代码占比仅约 2.5%。若候选人主要参与 x-cmd 本体开发，其经验更可能是 shell/awk/跨平台 CLI 工程，而非 Node.js 服务端/工程化。\n- **存在 Node.js 相关工作面的可能**：npm/npx/node 模块维护、@x-cmd-pkg/* npm 包发布流水线、cz-git（若参与）属于真实的 JS/TS/npm 生态工作。面试时应要求候选人具体说明所负责的模块。\n- **可验证的工程能力信号**：跨平台兼容（多 shell/多 OS/多架构）、CI/CD 自动化（发布全自动化）、包管理器设计、安全意识（SECURITY.md、供应链投毒分析文章）、高频发布节奏下的迭代能力。\n- **注意**：由于无公开招聘信息且团队极小（实质 1 人主导 + 少数协作者），「曾在 x-cmd 工作」的具体角色范围有限，建议核对候选人的 GitHub 账号是否出现在贡献者/组织成员列表中（当前公开名单：edwinjhlee、Zhengqbbb、qiakai、mnnna、ljh-zs、x-cmd-root、jerry8hero、sclevenger7777）。\n\n[Agent ID: agent-2aba785390314f7b]",
+      "omitted": 375
+    },
+    {
+      "type": "reasoning",
+      "text": "I have agent 1 and agent 3 full results. Agent 2's output was only a summary — I need the detailed fact list with URLs. Let me fetch the agent's full output... Actually the result returned is what we got. The Agent tool result only gave the summary. I could resume agent 2 to ask for the full fact list, or ask it via SendMessage. Let me resume it to output the full detailed facts with URLs.",
+      "time": "2026-10-10T07:31:16.242Z"
+    },
+    {
+      "type": "assistant",
+      "text": "三路调研已回来两路完整结果，横向竞品那路只返回了摘要。我让它把完整事实清单交出来。",
+      "time": "2026-10-10T07:31:16.252Z"
+    },
+    {
+      "type": "tool",
+      "name": "Agent",
+      "summary": "派出子任务：补全横向竞品事实清单",
+      "input": "你此前完成了 x-cmd 横向竞品调研。请把你收集到的完整事实清单（约 40 条带来源 URL 的事实）原样完整输出，包括：官方定位的竞品/参照物、每个主要竞品（aqua、pkgx、nix、Homebrew、mise、oh-my-zsh 等）的定位/用户规模stars数/核心优势/短板/口碑、HN 第一手正负面引文原文、x-cmd 的差异化卖点、赛道格局判断。不要缩写，把每条事实和来源 URL 都列出来。",
+      "stats": {
+        "agent": 1
+      },
+      "agent": "补全横向竞品事实清单",
+      "time": "2026-10-10T07:31:16.254Z",
+      "done": "2026-10-10T07:33:13.609Z",
+      "output": "# x-cmd 横向竞品调研 — 完整事实清单\n\n> 数据收集日期：2026-10-10。GitHub stars/forks 均为当日通过 GitHub API（api.github.com）实时查询的快照，引用时请注明查询日期。所有引文保留原文。\n\n---\n\n## 一、x-cmd 官方基本信息与自我定位\n\n1. **GitHub 仓库数据（2026-10-10 API 实查）**：x-cmd/x-cmd 共 **4,705 stars / 172 forks / 111 open issues**；仓库创建于 **2022-10-01**；许可证 **Apache License 2.0**；当前仓库描述为 \"Shell Superpowers for AI Agents\"。\n   来源：https://github.com/x-cmd/x-cmd （经 https://api.github.com/repos/x-cmd/x-cmd 实时查询）\n\n2. **官方核心定位原文**：\"X-CMD is a modern toolkit for POSIX shell (bash, zsh, ash, dash) — designed to make shell as powerful as Python's standard library.\"\n   来源：https://github.com/x-cmd/x-cmd\n\n3. **官方双层结构自述**：\n   - **Shell 标准库层**：\"We built 300+ modules in shell/awk, bringing modern capabilities to any system with just POSIX shell — even BusyBox, Alpine, or legacy machines.\"\n   - **按需包系统层**：\"We designed pkg: 600+ curated modern CLI tools (jq, fzf, fd, ripgrep...), reviewed and packaged by our team — maximizing environment compatibility, minimizing dependencies, lightweight download, on-demand loading, no root, no system pollution.\"\n   - **体积/加载性能**：\"Core ~1.1 MB. Non-interactive load <20 ms, interactive <60 ms.\"\n   来源：https://github.com/x-cmd/x-cmd\n\n4. **模块与包的官方类比**：\"Modules and Packages relate like **JS and WebAssembly** in browsers. Modules (JS): Native, lightweight, runs everywhere, can invoke packages. Packages (Wasm): Compiled, more powerful, loaded on-demand.\"\n   来源：https://github.com/x-cmd/x-cmd 及 https://www.gitee.com/x-cmd/x-cmd\n\n5. **AI 原生转向（GitHub README 原文）**：\n   - \"From ChatGPT era onward, we brought AI to shell. With just shell + curl, access OpenAI, Gemini, DeepSeek, Zhipu, MiniMax. Our pure-shell agent — under 2MB — delivers capabilities comparable to OpenClaw and Claude Code.\"\n   - \"After 5 years, we discovered shell's sweet spot: **AI agents**. Where network latency and LLM throughput dominate, shell's flexibility, native system integration, and tool-chaining shine. AWK streaming handles LLM output beautifully.\"\n   来源：https://github.com/x-cmd/x-cmd\n\n6. **历史 stars 记录**：中文博客曾记录“在Github上已经斩获3.2k Star”（写作时点早于本次查询），即近一年增长约 1.5k stars。\n   来源：https://hqyman.cn/post/16930.html\n\n7. **创始人身份**：李均豪（lijunhao / Edwin Lee），\"X-CMD 创始人 & CEO\"。\n   来源：https://cn.x-cmd.com/start/faq/ （作者署名）、https://news.ycombinator.com/threads?id=lijunhao （HN 账号，即 v0.4.0 changelog 署名 \"Edwin Lee, X-CMD Founder & CEO, https://ljh.sh\"，见 https://www.x-cmd.com/v/0.4.0）\n\n8. **商业化/资本动向**：\n   - Hub 服务定价页存在：https://hub.x-cmd.com/pricing （x-cmd 官网导航可见 \"Pricing\" 与 \"Enterprise+\"、\"企业支持\" https://cn.x-cmd.com/support）\n   - 奇绩创坛背书：“回顾2025……首先必须给 **奇绩创坛** 一个大大的感谢！🙏 他们的支持和指导，就像为我们注入了强劲动力”（2026 新年博客）。\n   来源：https://cn.x-cmd.com/blog/260104\n\n9. **2026 年开源动作**：\"x-cmd/install - **2500+ CLI Database Open Sourced**, Submit Your First ISSUE\"（2026-09-08 官网新闻）。\n   来源：https://x-cmd.com 首页 news 区（https://www.x-cmd.com/ 及 https://x-cmd.com/?utm_source=danielmiessler.com&utm_medium=referral&utm_campaign=ul-no-436-thoughts-on-the-future-of-ai-societal-stability）\n\n---\n\n## 二、x-cmd 自己定位的竞品/参照物（官方文档口径）\n\n10. **Homebrew — 官方专设对比页，结论是“不同层，非替代”**：\n    官方原文：\"brew and x-cmd's x env **overlap but are not substitutes** — they sit at different layers\"。对比表要点（brew vs x env）：范围 \"Mac-first (also Linux), whole package manager\" vs \"Single portable binaries, cross-platform\"；安装位置 \"System cellars (/opt/homebrew), shared\" vs \"Self-contained, per-tool\"；sudo \"Some operations need root\" vs \"None — fully user-space\"；生态 \"Largest macOS formula/cask catalog\" vs \"1000+ curated single-binary tools\"。结论原话：\"on a Mac you own, brew is the foundation. When you need a single tool without sudo (a locked-down CI runner, a shared server, a thumb drive), x env use is the lighter reach. **They compose** — many people have brew installed and still use x env use for portable, version-pinned binaries.\"\n    来源：https://www.x-cmd.com/install/brew/ ；中文版：https://cn.x-cmd.com/install/brew\n\n11. **MacPorts — 官方对比页**：MacPorts vs Homebrew 关键差异表（安装位置 /opt/local 完全隔离 vs /opt/homebrew；源码编译优先 vs bottle 优先等），并提及 \"Ports 仓库……包含 30000+ 个软件包\"。\n    来源：https://cn.x-cmd.com/install/macports\n\n12. **nvm / asdf / ohmyzsh / starship — FAQ 中共存点名**：官方 FAQ 原话：“以 nvm 为例：安装了 nvm 后再安装 x-cmd，nvm 仍可使用……如果同时使用 x-cmd env 安装的 node，最终谁被使用取决于 bashrc/zshrc 加载时的先后顺序 —— 后面的覆盖前面的。同理，如果同时用 ohmyzsh 主题与 x-cmd 主题，后面的会覆盖前面的。”\n    来源：https://cn.x-cmd.com/start/faq/\n\n13. **pkgx / pixi / asdf / cosmo — GitHub issue #18 中创始人亲自对比**（2024-06，回答“x-cmd 与 pkgx 有什么区别”）：\n    - \"pkg management is not x-cmd's target. **x-cmd aims to modernize the whole t\n\n…（中间省略 18562 字）…\n\ns://cn.x-cmd.com/blog/260131/ 、https://hk.x-cmd.com/blog/260207/ 等）。动机侧写：自述 HN/社媒推广\"results have been poor\"后转向 agent 渠道。\n    来源：https://github.com/x-cmd/x-cmd ；https://www.x-cmd.com/ ；https://news.ycombinator.com/item?id=41131195\n\n55. **风险事实（报告应客观呈现）**：\n    - 官网大量好评为主动征集筛选（https://cn.x-cmd.com/blog/260104 ），独立信任基础薄弱；\n    - 官方文档自述\"generated from command help and multiple data sources\"（自动生成，https://www.x-cmd.com/install/brew/ 页脚），中文优先、英文机翻质量被 HN 用户点名；\n    - 安全模型（众包 curl|sh 安装数据库、无集中 checksum 校验）遭专业安全背景用户（woodruffw、rafram）持续质疑，官方答复为“透明 shell 源码 + 用户自选”，社区未见系统性接受；\n    - 与既有同名工具 xcmd（Linux 远程命令执行工具 / Windows 反 RootKit 工具）存在命名混淆。\n    来源：https://news.ycombinator.com/item?id=44928937 ；https://news.ycombinator.com/item?id=40742722 ；https://baike.baidu.com/item/xcmd/11053625\n\n---\n\n## 附：本次调研未采信/未采集项\n\n- Homebrew “2024 安装量排行”数据（songjungho.com）：数字形态疑似编造，**未采信**（https://songjungho.com/en/dev/2025-update-why-every-mac-user-should-install-homebrew/ ）\n- pkgxdev/pkgx 的 stars 数：**未采集**（本次未查询该仓库 API）\n- x-cmd 官方 mise 对比表正文：页面 JS 渲染无法提取，**找不到**\n- Homebrew 官方用户总量数字（\"millions of users\" 类表述）：brew.sh 现版页面未含此声明，**找不到官方现成口径**\n- 装机量（非 stars）类数据：x-cmd 及各竞品均无可验证的公开装机量统计，**找不到**\n\n[Agent ID: agent-cb24f3f59b334854]",
+      "omitted": 18562
+    },
+    {
+      "type": "reasoning",
+      "text": "I now have rich material. Let me quickly check a couple things myself? I have enough. Now write the report.\n\nStructure per skill:\n- Cover: # x-cmd 横纵分析报告\n- 一句话定义\n- 纵向分析 (6000-15000字)\n- 横向分析 (3000-10000字)\n- 横纵交汇洞察 (1500-3000字)\n- Plus: candidate/Node.js 岗位关联分析 (user requirement)\n- 信息来源\n\nNote: user's context: \"这位候选人应聘的是我们的 Node.js 开发岗位\" — we don't have candidate's identity. Report should analyze what x-cmd experience means for Node.js role, interview questions, and note that candidate-specific info isn't provided; verification points (check GitHub contributors list).\n\nWord count target: 10,000-30,000 chars total. That's long but doable. Let me aim for ~12,000-15,000 Chinese characters. I'll write the markdown file, then convert with the md_to_pdf script using the local environment command.\n\nKey facts to weave in (with sources):\n- 定位: \"The First Agent-Native Shell Toolbox\" / \"Shell Superpowers for AI Agents\", POSIX shell toolkit making shell as powerful as Python stdlib\n- Founder 李均豪 (edwinjhlee), ex-Oracle 云计算部门高级开发工程师, 深圳多翼创新 CTO, company 中山市栩栩云生科技有限公司 (2021成立)\n- 2018 TypeScript前身 → 2020 Go → 2020 C/Rust → 2021 Bash (merge x-bash) → POSIX shell\n- GitHub repo created 2022-10-01\n- 奇绩创坛天使轮 2025-12\n- Apache 2.0 (was AGPL dual until 2026-08-05 commit fb2d348)\n- Hub 商业化 $4.5/$18 per month\n- stars 4705 (2026-10-10), 149 releases, v0.10.12\n- Team: ~单人主导, edwinjhlee 655 commits; Zhengqbbb (cz-git/czg author, TS/npm), 4 core team on About\n- Node.js relation: x env use node, x npm, x npx modules, @x-cmd-pkg/* npm packages, repo only ~2.5% JS/TS\n- Community: HN negative quotes, How-To Geek positive, marketing-driven testimonials\n- Competitors: aqua, pkgx, nix, mise, homebrew, oh-my-zsh etc.\n\nFor the interview angle:\n- x-cmd is essentially a shell/awk project — if candidate worked on core, that's not Node.js\n- Possible Node.js-relevant surfaces: npm/npx modules, @x-cmd-pkg binary distribution pipeline (version scheme, CI automation), Zhengqbbb's cz-git, Hub cloud service (likely web stack)\n- Verification: check candidate's GitHub handle in contributors list; ask which modules they owned\n- Transferable skills: cross-platform compat, CI/CD automation, package manager design, CLI UX, security awareness (supply chain), tiny-team scrappiness\n- Risks: small team — engineering process maturity (weak testing culture observed), solo-founder project\n\nAlso note founder name discrepancy: 李均豪/李俊豪 (agent 3 said 李俊豪). Agent 1 said 李均豪 (Li Junhao), agent 3 said 李俊豪. HN username lijunhao. Official about page presumably says 李均豪. I'll write 李均豪（Li Junhao，网名 Edwin Lee / edwinjhlee）and maybe note spelling variations. To be safe, use 李均豪 with pinyin Li Junhao; both agents agree on Li Junhao. The Chinese character spelling differs between agents — one said 均豪 (agent1, citing cn.x-cmd.com/about) and other said 俊豪 (agent3, citing ljh.sh). I can't verify which; I'll note it: 公开页面中名字拼写存在「李均豪」与「李俊豪」两种写法（拼音均为 Li Junhao）——hmm, that's messy but honest. Actually better to mention with the caveat. I could quickly verify with a WebFetch to cn.x-cmd.com/about. Let me do that quickly.\n\nAlso verify a couple key URLs quickly? The agents provided sources. Let me do one quick WebFetch of cn.x-cmd.com/about to confirm founder name and company info. That's cheap.\n\nThen write the MD file (~long), then run the PDF conversion.\n\nLet me fetch the about page.",
+      "time": "2026-10-10T07:33:55.969Z"
+    },
+    {
+      "type": "assistant",
+      "text": "信息已足够。我快速核实一个两个调研子任务结果有出入的细节（创始人中文名的写法），然后开始撰写报告。",
+      "time": "2026-10-10T07:33:56.015Z"
+    },
+    {
+      "type": "tool",
+      "name": "WebFetch",
+      "summary": "打开 cn.x-cmd.com/about",
+      "input": "{\n  \"prompt\": \"这个页面是 x-cmd 的官方 About/关于我们页面。请提取：1) 创始人的中文/英文姓名（注意准确的中文字）与头衔；2) 公司名称、成立时间、所在地；3) 团队成员名单；4) 创始人的职业背景描述。逐字引用原文。\",\n  \"url\": \"https://cn.x-cmd.com/about\"\n}",
+      "stats": {
+        "open": 1
+      },
+      "time": "2026-10-10T07:33:56.037Z",
+      "done": "2026-10-10T07:33:59.378Z",
+      "output": "**标题**: 关于我们 | x-cmd\n\n[Skip to content](https://cn.x-cmd.com/about#VPContent)\n\n* * *\n\n# 中山市栩栩云生科技有限公司\n\n## 公司简介 [​](https://cn.x-cmd.com/about#%E5%85%AC%E5%8F%B8%E7%AE%80%E4%BB%8B)\n\n中山市栩栩云生科技有限公司（以下简称“栩栩云生”）成立于2021年，总部位于粤港澳大湾区重要节点城市——广东省中山市。公司以“重塑人、AI 与机器的交互方式”为使命，致力于构建下一代命令行生态系统。\n\n栩栩云生由前 Oracle 高级工程师、多翼创新 CTO 李均豪先生创立，核心团队来自国内外知名科技企业，具备深厚的技术底蕴和丰富的产业经验。公司专注于系统软件与开发者工具领域，通过自主研发的 X-CMD 系列产品，为全球开发者、运维工程师和 AI 应用提供革命性的命令行体验。\n\n我们的核心产品 X-CMD 是一个面向 AI Agent 时代的智能化命令行生态系统，具备以下突出特点：\n\n1. 极致性能：基于 POSIX Shell 构建，实现毫秒级启动速度和超轻量级资源占用\n2. 强大生态：集成1600+预配置应用工具，支持一键部署和动态管理\n3. 安全可靠：创新性地融合安全沙盒与容器技术，确保系统安全性和环境隔离\n4. 智能融合：专为 AI Agent 优化，提供自然语言到系统命令的智能转换接口\n\n目前，X-CMD 已经完成核心技术研发和早期社区建设，在 GitHub、Gitee 和 GitCode 等开源平台获得开发者社区的积极关注和贡献。产品已迭代发布多个版本，正在进入快速发展和市场推广的关键阶段。\n\n**X-CMD 已成功获得 Gitee 最有价值开源项目（GVP）认证，并作为优秀项目从 GitCode 平台的 G-Star 项目毕业**。这标志着X-CMD在项目创新性、技术价值及社区影响力方面获得了国内主流开源平台的高度认可。\n\n**荣誉与认证**：\n\n- **GVP（Gitee最有价值开源项目）**：此认证旨在评定和表彰 Gitee 平台上具有高度价值和影响力的优秀开源项目，X-CMD 的入选意味着其技术先进性、开源治理能力及市场应用潜力得到了专业认可。\n- **G-Star项目毕业**：G-Star 是 GitCode 平台发起的优质开源项目扶持计划，旨在孵化国内顶尖开源项目。X-CMD 成功毕业，表明项目在 GitCode 的帮助下，在**技术成熟度、社区建设、生态发展等方面取得了显著进展，实现了从孵化到成熟的跨越式发展**。\n\n栩栩云生始终坚持以技术创新驱动发展，已获得相关软件著作权。公司秉承“开放、协作、创新”的理念，通过打造强大的开发者社区，持续推动命令行工具的现代化演进。\n\n未来，公司将立足于粤港澳大湾区的创新沃土，进一步加大研发投入，深化产品创新，拓展全球市场，致力于成为全球领先的开发者基础设施提供商，为人工智能时代的工具链革新做出重要贡献。\n\n## 联系我们 [​](https://cn.x-cmd.com/about#%E8%81%94%E7%B3%BB%E6%88%91%E4%BB%AC)\n\n公司地址：广东省中山市西区彩虹大道 9 号嘉华互联网中心 702 室  \n官网：www.x-cmd.com  \n邮箱：[邮箱]"
+    },
+    {
+      "type": "reasoning",
+      "text": "Confirmed: 李均豪. Now write the report markdown. Aim ~13,000-16,000 Chinese characters. Structure:\n\n# x-cmd 横纵分析报告\n> 研究时间：2026-10-10 | 所属领域：开发者工具 / 命令行基础设施 | 研究对象类型：公司与开源项目\n\n## 一、一句话定义\n## 二、纵向分析：从诞生到当下\n### 起源：一个运维工程师的怨念（2018-2021）\n### 诞生与内测（2021-2022）\n### 开源与冷启动（2023-2024）\n### 推广受挫与安全争议（2024）\n### 融资与叙事转向（2025-2026）\n### 商业化：Hub 与许可证切换\n### 决策逻辑复盘\n### 阶段划分总结\n## 三、横向分析：竞争图谱\n### 先分清物种：谁是真竞品\n### 真竞品：aqua、pkgx、nix run\n### 相邻物种：Homebrew、mise、oh-my-zsh 们\n### 用户口碑：两个世界的评价\n### 生态位与格局\n## 四、横纵交汇洞察\n### 历史决策如何塑造今天的位置\n### 三个剧本\n## 五、对 Node.js 岗位招聘的启示（候选人评估）\n### x-cmd 经历与 Node.js 岗位的关系图谱\n### 技术栈匹配的现实\n### 面试重点了解清单\n### 背景核实建议\n## 六、信息来源\n\nPer skill, the report structure has 一句话定义 etc. The user's requirement #2: only public info, each key fact with source link, 找不到 written explicitly. I'll include inline source links throughout (markdown links), and full source list at end.\n\nStyle: 卡兹克 style with rhythm, opinions marked as 判断. Avoid banned phrases (说白了、本质上、意味着、综上所述、首先其次最后、值得注意的是...). Use 「」quotes.\n\nLength: aim substantial. Let me write it now. I'll write to ~/WorkBuddy/2026-10-10-15-20-41/x-cmd_横纵分析报告.md\n\nThen convert to PDF using the local command:\nDYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib ~/.workbuddy/binaries/python/envs/default/bin/python3 ~/.workbuddy/skills/hv-analysis/scripts/md_to_pdf.py input.md output.pdf --title ... --author ...\n\nNote: fonts — CSS fallback lacks Chinese font; environment note says falls to Helvetica, Chinese renders normally (maybe via system fallback). It said \"中文渲染正常但可按需替换为 PingFang SC\". Fine.\n\nLet me write the markdown. I need to be careful about factual accuracy with the collected facts. Key numbers:\n\n- Stars 4,705 / 172 forks (2026-10-10)\n- repo created 2022-10-01\n- company 中山市栩栩云生科技有限公司, 2021, 中山市\n- founder 李均豪, ex-Oracle 高级工程师（企业级分布式日志审计）, 多翼创新 CTO (note: agent1 said 深圳多翼创新, agent3 said 多益创新 — spelling discrepancy again; official about page says \"多翼创新 CTO 李均豪先生\" — confirmed 多翼创新)\n- 2018 TypeScript → 2020 Golang → 2020 C/Rust → 2021 Bash/merge x-bash → POSIX shell\n- HN posts: 2024-06-20 (17pts), 2025-08-17 (22pts, 12 comments), Ask HN 2024-08 steph-123 complaint\n- 奇绩创坛 angel round 2025-12 (F25 Demo Day 2025.12.7)\n- License: AGPL dual → Apache 2.0 (commit fb2d348, 2026-08-05)\n- Hub pricing: Starter ~$4.5/mo, Pro ~$18/mo\n- Releases: 149 releases, v0.1.0~v0.10.12, weekly cadence in 2026; v0.10.12 2026-09-24\n- contributors: 8 people, edwinjhlee 655\n- Zhengqbbb = cz-git/czg author (TS, 1.5k stars, used by Nx/Element Plus)\n- Repo languages: Awk 1.62MB, Shell 188KB, Python 138KB, TS 40KB, JS 8KB — JS+TS ~2.5%\n- x env use node (node v24.14.1), x npm, x npx modules; @x-cmd-pkg/* npm scope; npm publisher lunrenyi\n- CI: 6 workflows, automated releases, dogfooding x-cmd/action\n- tests: only 5 test dirs, no test CI\n- Competitors stars: Homebrew 49,966; mise 34,862; asdf 25,595; Nix 17,847; aqua 1,861; oh-my-zsh 190,060; starship 60,197; fzf 83,514; atuin 31,961; zoxide 40,005\n- HN negative quotes: woodruffw, echelon, rafram, rictic...\n- How-To Geek positive review\n- issue #18 founder's pkgx comparison\n- Modules/Packages JS-Wasm analogy\n- No recruiting info found\n- Team: About page lists 4 (Edwin Lee, Zhuang Zhuang, Tian Tong, Hui Hui)\n- 2023 toutiao: internal beta, <500KB, <100ms load\n- tmux module developed 2022, open-sourced v0.7.14 (2026-01)\n- x-cmd/install 2500+ CLI database open sourced 2026-09\n\nWord targets: 纵向 ~7000字, 横向 ~5000字, 交汇 ~2000字, plus Node.js section ~2500字. Total ~17k字. Good.\n\nLet me draft carefully but efficiently. I'll write the file now.",
+      "time": "2026-10-10T07:37:37.058Z"
+    },
+    {
+      "type": "assistant",
+      "text": "创始人写法已确认为「李均豪」（官网原文）。材料齐了，现在撰写完整报告并生成 PDF。",
+      "time": "2026-10-10T07:37:37.067Z"
+    },
+    {
+      "type": "tool",
+      "name": "Write",
+      "summary": "写入 x-cmd_横纵分析报告.md",
+      "input": "# x-cmd 横纵分析报告\n\n> 研究时间：2026 年 10 月 10 日 | 所属领域：开发者工具 / 命令行基础设施 | 研究对象类型：公司 + 开源项目（中山市栩栩云生科技有限公司 / x-cmd）\n>\n> 研究动机：评估一位曾在 x-cmd 工作的候选人应聘 Node.js 开发岗位的匹配度。本报告只用公开信息，所有关键事实附来源链接；查不到的信息明确标注「找不到」，不做推测。\n\n## 一、一句话定义\n\nx-cmd 是一家设在广东中山的微型公司（中山市栩栩云生科技有限公司，2021 年成立）做的开源项目：用纯 POSIX Shell + AWK 实现的「命令行瑞士军刀」，打包了 300+ 个 shell 模块、600+ 个免 root 按需安装的 CLI 工具，2025 年底拿到奇绩创坛天使轮后，把全部叙事押在了「AI Agent 的 Shell 工具底座」上。（来源：[官网 About](https://cn.x-cmd.com/about)、[GitHub README](https://github.com/x-cmd/x-cmd)、[奇绩创坛融资公告](https://cn.x-cmd.com/blog/251211/)）\n\n## 二、纵向分析：从诞生到当下\n\n### 2.1 起源：一个运维工程师的怨念（2018—2021）\n\n要理解 x-cmd，得先理解李均豪这个人。\n\n官网的介绍很克制：「栩栩云生由前 Oracle 高级工程师、多翼创新 CTO 李均豪先生创立」（来源：[cn.x-cmd.com/about](https://cn.x-cmd.com/about)）。Oracle 时期他负责的是企业级分布式日志审计系统研发，之后在深圳多翼创新做过 CTO（具体任职年份：找不到）。他在 GitHub 上的账号是 [edwinjhlee](https://github.com/edwinjhlee)，注册于 2013 年，个人博客是 [ljh.sh](https://ljh.sh)。\n\nx-cmd 的诞生动机，李均豪本人在 Hacker News 上亲口讲过，讲得很具体：\n\n> \"As a former operation engineer... installing a simple tool, like jq, on a client's server required unnecessary sudo privileges... some software installations demanded extensive dependency upgrades, potentially\n\n…（中间省略 19929 字）…\n\n4\n\n**明确「找不到」的信息汇总**：天使轮金额与投后估值；公司人员规模；用户/下载量数据；招聘信息（无任何公开渠道痕迹）；创始人任职 Oracle/多翼创新的具体年份；Hub 后端技术栈；V2EX/知乎/掘金的独立讨论帖；pkgx 仓库 stars（未采集）；2026-04-18 之前各 release 的原始发布日期（被批量重发覆盖）。\n\n---\n\n方法论说明：本报告采用横纵分析法（由数字生命卡兹克提出），纵向沿时间轴还原研究对象的完整发展脉络，横向以当前时间点切面对比同期竞品，最终在纵横交汇处给出综合判断。所有事实均来自公开信息并标注来源；标注「判断」的段落为分析者观点，非事实陈述。\n",
+      "stats": {
+        "edit": 1
+      },
+      "time": "2026-10-10T07:37:37.070Z",
+      "done": "2026-10-10T07:37:37.095Z",
+      "output": "Successfully created and wrote to new file: ~/WorkBuddy/2026-10-10-15-20-41/x-cmd_横纵分析报告.md",
+      "omitted": 19929
+    },
+    {
+      "type": "tool",
+      "name": "Bash",
+      "summary": "运行 cd ~/WorkBuddy/2026-10-10-15-20-41 && DYLD_FALLBACK_LIBRARY_PATH=…",
+      "input": "cd ~/WorkBuddy/2026-10-10-15-20-41 && DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib ~/.workbuddy/binaries/python/envs/default/bin/python3 ~/.workbuddy/skills/hv-analysis/scripts/md_to_pdf.py \"x-cmd_横纵分析报告.md\" \"x-cmd_横纵分析报告.pdf\" --title \"x-cmd 横纵分析报告\" --author \"WorkBuddy\"",
+      "stats": {
+        "command": 1
+      },
+      "time": "2026-10-10T07:37:51.740Z",
+      "done": "2026-10-10T07:37:54.074Z",
+      "output": "Command: cd ~/WorkBuddy/2026-10-10-15-20-41 && DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib ~/.workbuddy/binaries/python/envs/default/bin/python3 ~/.workbuddy/skills/hv-analysis/scripts/md_to_pdf.py \"x-cmd_横纵分析报告.md\" \"x-cmd_横纵分析报告.pdf\" --title \"x-cmd 横纵分析报告\" --author \"WorkBuddy\"\nStdout: [OK] HTML 已生成: x-cmd_横纵分析报告.html\r\n[OK] PDF 已生成: x-cmd_横纵分析报告.pdf (519.4 KB)\r\n\nStderr: (empty)\nExit Code: 0\nSignal: (none)"
+    },
+    {
+      "type": "reasoning",
+      "text": "PDF generated. Now write memory log, then present files. Also there's a small typo I noticed in sources: \"ohmyzoh\" corrected inline awkwardly (\"修正为\"). Let me fix that in the md and regenerate? It's a minor blemish in the source list. Better fix it and regenerate PDF.",
+      "time": "2026-10-10T07:38:01.075Z"
+    },
+    {
+      "type": "assistant",
+      "text": "修一个来源清单里的小笔误并重新生成 PDF：",
+      "time": "2026-10-10T07:38:01.094Z"
+    },
+    {
+      "type": "tool",
+      "name": "Edit",
+      "summary": "修改 x-cmd_横纵分析报告.md",
+      "input": "{\n  \"file_path\": \"~/WorkBuddy/2026-10-10-15-20-41/x-cmd_横纵分析报告.md\",\n  \"new_string\": \"https://github.com/ohmyzsh/ohmyzsh 、\",\n  \"old_string\": \"https://github.com/ohmyzoh/ohmyzsh 修正为 https://github.com/ohmyzsh/ohmyzsh 、\",\n  \"replace_all\": false\n}",
+      "stats": {
+        "edit": 1
+      },
+      "time": "2026-10-10T07:38:01.100Z",
+      "done": "2026-10-10T07:38:01.112Z",
+      "output": "Successfully edited file: ~/WorkBuddy/2026-10-10-15-20-41/x-cmd_横纵分析报告.md"
+    },
+    {
+      "type": "tool",
+      "name": "Bash",
+      "summary": "运行 cd ~/WorkBuddy/2026-10-10-15-20-41 && DYLD_FALLBACK_LIBRARY_PATH=…",
+      "input": "cd ~/WorkBuddy/2026-10-10-15-20-41 && DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib ~/.workbuddy/binaries/python/envs/default/bin/python3 ~/.workbuddy/skills/hv-analysis/scripts/md_to_pdf.py \"x-cmd_横纵分析报告.md\" \"x-cmd_横纵分析报告.pdf\" --title \"x-cmd 横纵分析报告\" --author \"WorkBuddy\"",
+      "stats": {
+        "command": 1
+      },
+      "time": "2026-10-10T07:38:09.174Z",
+      "done": "2026-10-10T07:38:12.879Z",
+      "output": "Command: cd ~/WorkBuddy/2026-10-10-15-20-41 && DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib ~/.workbuddy/binaries/python/envs/default/bin/python3 ~/.workbuddy/skills/hv-analysis/scripts/md_to_pdf.py \"x-cmd_横纵分析报告.md\" \"x-cmd_横纵分析报告.pdf\" --title \"x-cmd 横纵分析报告\" --author \"WorkBuddy\"\nStdout: [OK] HTML 已生成: x-cmd_横纵分析报告.html\r\n[OK] PDF 已生成: x-cmd_横纵分析报告.pdf (519.3 KB)\r\n\nStderr: (empty)\nExit Code: 0\nSignal: (none)"
+    },
+    {
+      "type": "tool",
+      "name": "Write",
+      "summary": "写入 2026-10-10.md",
+      "input": "# 2026-10-10\n\n## x-cmd 横纵分析报告（含 Node.js 岗位候选人评估）\n\n- 应用户要求，用横纵分析法（hv-analysis skill）研究 x-cmd，产出中文 PDF 报告。\n- 产出文件：`x-cmd_横纵分析报告.md` / `.pdf` / `.html`（工作目录）。\n- 关键调研结论（供后续候选人面试参考）：\n  - x-cmd = 中山市栩栩云生科技有限公司（2021 成立，广东中山），创始人李均豪（edwinjhlee，前 Oracle、多翼创新 CTO）；2025-12 获奇绩创坛天使轮。\n  - 项目本质：POSIX Shell + AWK 实现的 CLI 工具集（Awk 1.62MB 主导，JS/TS 仅约 2.5% 代码量）；GitHub 4,705 stars（2026-10-10）；8 名贡献者、创始人 655 commits 占绝对主导（微型团队）。\n  - 与 Node.js 相关的工作面：x npm/x npx/x env(node) 模块、@x-cmd-pkg/* npm 二进制分发包流水线、Hub 云服务、核心成员 Zhengqbbb 是 cz-git/czg（TS，1.5k stars）作者。\n  - 评估建议：候选人价值取决于具体负责模块；面试第一要务是问清负责面 + 核对 GitHub 贡献者身份；仓库测试痕迹薄弱，需考察测试习惯。\n  - 报告所有事实均附来源链接，找不到的信息（融资金额、团队规模、招聘信息等）已明确标注。\n",
+      "stats": {
+        "edit": 1
+      },
+      "time": "2026-10-10T07:38:22.484Z",
+      "done": "2026-10-10T07:38:22.505Z",
+      "output": "Successfully created and wrote to new file: ~/WorkBuddy/2026-10-10-15-20-41/.workbuddy/memory/2026-10-10.md"
+    },
+    {
+      "type": "tool",
+      "name": "present_files",
+      "summary": "present_files",
+      "input": "{\n  \"cwd\": \"~/WorkBuddy/2026-10-10-15-20-41\",\n  \"explanation\": \"x-cmd 横纵分析深度研究报告（含 Node.js 岗位候选人评估），PDF 版可直接阅读，Markdown 为源稿。\",\n  \"files\": [\n    \"~/WorkBuddy/2026-10-10-15-20-41/x-cmd_横纵分析报告.pdf\",\n    \"~/WorkBuddy/2026-10-10-15-20-41/x-cmd_横纵分析报告.md\"\n  ]\n}",
+      "stats": {
+        "other": 1
+      },
+      "time": "2026-10-10T07:38:42.721Z",
+      "done": "2026-10-10T07:38:42.733Z",
+      "output": "{\"type\":\"present_files_result\",\"files\":[\"~/WorkBuddy/2026-10-10-15-20-41/x-cmd_横纵分析报告.pdf\",\"~/WorkBuddy/2026-10-10-15-20-41/x-cmd_横纵分析报告.md\"],\"previewed\":[],\"explanation\":\"x-cmd 横纵分析深度研究报告（含 Node.js 岗位候选人评估），PDF 版可直接阅读，Markdown 为源稿。\",\"message\":\"Successfully presented 2 file(s).\"}"
+    },
+    {
+      "type": "assistant",
+      "text": "报告已完成，PDF 和 Markdown 源稿都已交付。约 1.5 万字，全部基于公开信息，每个关键事实附来源链接，查不到的（融资金额、团队规模、招聘信息等）都明确标了「找不到」。\n\n**报告核心结论：**\n\n**这家公司是什么**：x-cmd 是广东中山的微型公司「栩栩云生」（2021 年成立）的开源项目——纯 POSIX Shell + AWK 实现的命令行工具集，300+ 模块、600+ 免 root 按需安装的 CLI 工具。创始人李均豪（前 Oracle、多翼创新 CTO），2025 年 12 月拿奇绩创坛天使轮，之后叙事全面转向「AI Agent 的 Shell 底座」。\n\n**对 Node.js 岗位评估最要紧的三个事实**：\n\n1. **技术栈错配风险是真实的**：x-cmd 主体是 Awk + Shell，JS/TS 只占约 2.5% 的代码量（11 个 .js/.ts 文件）。如果候选人做的是本体开发，他的经验是跨平台 CLI 工程，不是 Node.js 工程化。\n2. **但存在四块真实相关的 Node.js 工作面**：`x npm`/`x npx`/`x env node` 模块维护；npmjs 上 `@x-cmd-pkg/*` 二进制分发包的构建发布流水线（跨平台、版本号方案、自动化）；Hub 云服务后端；以及核心成员 Zhengqbbb 本人是 cz-git/czg（TypeScript，1.5k stars、月下载 22 万）的作者。\n3. **团队极小且可验证**：GitHub 公开贡献者仅 8 人，创始人一人 655 commits 占绝对主导。候选人的 GitHub 账号可以直接对照公开贡献者名单核实——这是面试前就能做的背景验证。\n\n**面试建议（报告第五章有完整清单）**：第一优先问清他具体负责哪块（画模块图）；第二核对 GitHub 身份；然后针对 npm 流水线经历者出深水区探针题（binary 包的 optionalDependencies 模式、`0.0.0-v24.14.1-win.x64.0` 这种版本号方案在 semver 约束下怎么处理）；另外注意 x-cmd 仓库测试痕迹薄弱（仅 5 个 test 目录、无测试 CI），自动化测试习惯需要重点考察。\n\n一句话：候选人的价值不取决于「在 x-cmd 工作过」这个标签，而取决于他在报告第 5.1 节那张关系图谱里的具体位置——面试第一要务就是把位置问清楚。",
+      "time": "2026-10-10T07:38:57.309Z"
+    }
+  ],
+  "$schema": "https://encore.niracler.com/schema/session.schema.json",
+  "description": "交给 WorkBuddy 一条公开调研任务，要求只用公开信息且每条关键事实附来源链接。它并行派出 4 个子 Agent 检索版本演进与竞品格局，18 分钟交回约 1.5 万字研究报告。",
+  "lang": "zh"
+}
