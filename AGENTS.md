@@ -18,9 +18,9 @@ Encore strictly separates data, browser player, and CLI tooling:
 
 ## 2. Build & Sync Discipline
 
-- **Rebuild Player Bundle**: `player/encore-player.js` is a generated bundle built automatically on `prepare`, `prepack`, `pretest`, and `build:site` (or manually via `npm run build:player`) from `src/i18n.mjs`, `src/markdown.mjs`, `src/timeline.mjs`, `src/render.mjs`, and `src/player-runtime.mjs`:
+- **Rebuild Player Bundle**: `player/encore-player.js` is a generated bundle built automatically on `prepare`, `prepack`, `pretest`, and `build:site` (or manually via `pnpm run build:player`) from `src/i18n.mjs`, `src/markdown.mjs`, `src/timeline.mjs`, `src/render.mjs`, and `src/player-runtime.mjs`:
   ```bash
-  npm run build:player
+  pnpm run build:player
   ```
   `test/encore.test.mjs` asserts that `player/encore-player.js` matches `buildStandalonePlayerJs({ write: false })`.
 - **Keep Schema & Types Aligned**: When adding fields to `session.json` or changing public exports in `src/index.mjs`, update both `schema/session.schema.json` and `src/index.d.ts`.
@@ -29,14 +29,14 @@ Encore strictly separates data, browser player, and CLI tooling:
 
 - Run unit, fixture, and bundle sync tests:
   ```bash
-  npm test
+  pnpm test
   ```
 - Build the static showcase site (`https://encore.niracler.com` -> `dist/site/`):
   ```bash
-  npm run build:site
+  pnpm run build:site
   ```
 
 ## 4. Git & Release Conventions
 
 - Use English Conventional Commits (`feat(cli): ...`, `fix(player): ...`, `docs: ...`, `test: ...`).
-- Do not run `git commit`, `git push`, or `npm publish` unless explicitly requested by the user.
+- Do not run `git commit`, `git push`, or `pnpm publish` unless explicitly requested by the user.

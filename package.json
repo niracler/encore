@@ -38,10 +38,10 @@
   "scripts": {
     "build:player": "node -e \"import('./src/player-assets.mjs').then(m => m.buildStandalonePlayerJs())\"",
     "build:site": "node scripts/build-site.mjs",
-    "prepare": "npm run build:player",
-    "prepack": "npm run build:player",
-    "pretest": "npm run build:player",
-    "prepublishOnly": "npm test",
+    "prepare": "node -e \"import('./src/player-assets.mjs').then(m => m.buildStandalonePlayerJs())\"",
+    "prepack": "node -e \"import('./src/player-assets.mjs').then(m => m.buildStandalonePlayerJs())\"",
+    "pretest": "node -e \"import('./src/player-assets.mjs').then(m => m.buildStandalonePlayerJs())\"",
+    "prepublishOnly": "pnpm test",
     "release": "pnpm publish && git push origin main --follow-tags && gh release create \"v$(node -p \"require('./package.json').version\")\" --generate-notes",
     "test": "node --test test/*.test.mjs"
   },
