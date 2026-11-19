@@ -4,6 +4,12 @@ All notable changes to `@niracler/encore` will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-19
+
+### Changed
+- The minimum supported Node.js version is now 20.10.0.
+- Pre-rendered stages accept course navigation and attach playback controls to embedded session data.
+
 ### Added
 - **WorkBuddy Adapter (`src/workbuddy.mjs`)**: Auto-detects WorkBuddy `.jsonl` transcripts, scans `~/.workbuddy/projects` in the interactive session picker, and mounts WorkBuddy system prompt templates.
 - **Formal Data Contract & Types**: Added JSON Schema Draft 2020-12 (`schema/session.schema.json`) and TypeScript declarations (`src/index.d.ts`).
