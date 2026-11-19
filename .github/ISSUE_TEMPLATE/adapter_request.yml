@@ -1,0 +1,23 @@
+name: Agent Adapter Request
+description: Request log parsing support for another AI agent or coding tool
+labels: ["enhancement"]
+body:
+  - type: input
+    id: tool_name
+    attributes:
+      label: Agent / Tool Name
+      placeholder: "e.g. Gemini CLI, OpenCode, Cursor, Aider"
+    validations:
+      required: true
+  - type: input
+    id: log_location
+    attributes:
+      label: Default Log Path & Format
+      placeholder: "e.g. ~/.tool/sessions/*.jsonl"
+  - type: textarea
+    id: sample
+    attributes:
+      label: Sanitized Sample Transcript
+      description: Paste a short, redacted snippet showing user turns, assistant replies, tool calls, and token usage (if present).
+    validations:
+      required: true
