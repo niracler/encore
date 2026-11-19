@@ -34,17 +34,19 @@
 
 ## 01 · 即兴返场（生肉直出）
 
+以下命令使用 npm 上标记为 `latest` 的 Encore 版本。
+
 ```bash
 # 1. 交互式选片 —— 自动扫描 ~/.codex/sessions、~/.claude/projects 与 ~/.workbuddy/projects
 #    按 ↑ / ↓ 选择会话，← / → 翻页
-npx @niracler/encore
+npx @niracler/encore@latest
 
 # 2. 指定日志直出 —— 自动识别 .jsonl / .jsonl.zst / Claude.ai .json
-npx @niracler/encore /path/to/rollout.jsonl -o ./replays/my-session
+npx @niracler/encore@latest /path/to/rollout.jsonl -o ./replays/my-session
 
 # 3. 直接手改 ./replays/my-session/session.json 并刷新浏览器即可生效；
 #    对目录重跑命令可同步更新 <title> 并重新执行隐私检查：
-npx @niracler/encore ./replays/my-session
+npx @niracler/encore@latest ./replays/my-session
 ```
 
 ---

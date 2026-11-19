@@ -34,17 +34,19 @@
 
 ## 01 · Instant Curtain Call (Raw Cut)
 
+These commands use the Encore release tagged `latest` on npm.
+
 ```bash
 # 1. Interactive picker — scans ~/.codex/sessions, ~/.claude/projects & ~/.workbuddy/projects
 #    Use ↑ / ↓ to select and ← / → to flip pages
-npx @niracler/encore
+npx @niracler/encore@latest
 
 # 2. Direct export — auto-detects .jsonl / .jsonl.zst / Claude.ai .json
-npx @niracler/encore /path/to/rollout.jsonl -o ./replays/my-session
+npx @niracler/encore@latest /path/to/rollout.jsonl -o ./replays/my-session
 
 # 3. Edit ./replays/my-session/session.json and refresh the browser directly,
 #    or re-run on the folder to sync <title> and privacy checks:
-npx @niracler/encore ./replays/my-session
+npx @niracler/encore@latest ./replays/my-session
 ```
 
 ---
