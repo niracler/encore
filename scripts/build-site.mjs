@@ -16,7 +16,8 @@ const playerJs = buildStandalonePlayerJs({ write: true })
 writeFileSync(join(outDir, 'encore-player.js'), playerJs, 'utf8')
 copyFileSync(join(repoRoot, 'player', 'encore-player.css'), join(outDir, 'encore-player.css'))
 copyFileSync(join(siteSrcDir, 'CNAME'), join(outDir, 'CNAME'))
-copyFileSync(join(siteSrcDir, 'session.json'), join(outDir, 'session.json'))
+rmSync(join(outDir, 'session.json'), { force: true })
+copyFileSync(join(siteSrcDir, 'showcase.js'), join(outDir, 'showcase.js'))
 copyFileSync(join(repoRoot, 'schema', 'session.schema.json'), join(outDir, 'schema', 'session.schema.json'))
 
 const demosSrcDir = join(siteSrcDir, 'demos')
@@ -34,64 +35,6 @@ for (const img of ['preview-zh.webp', 'preview-en.webp']) {
 }
 
 const pkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'))
-
-const demos = [
-  {
-    id: 'encore',
-    src: './session.json',
-    agent: 'Codex',
-    agentTone: 'codex',
-    label: 'Design & Ship Encore',
-    meta: 'EN · Feature Tour',
-  },
-  {
-    id: 'poster-redesign',
-    src: './demos/poster-redesign/session.json',
-    agent: 'Codex',
-    agentTone: 'codex',
-    label: 'Poster Redesign',
-    meta: '7 Frames · Compaction',
-  },
-  {
-    id: 'work-stages-site',
-    src: './demos/work-stages-site/session.json',
-    agent: 'Claude Code',
-    agentTone: 'claude-code',
-    label: 'Site Integration',
-    meta: '4 Sub-Agents · 5 Frames',
-  },
-  {
-    id: 'work-stages-design',
-    src: './demos/work-stages-design/session.json',
-    agent: 'Claude.ai',
-    agentTone: 'claude-ai',
-    label: '7-Stage Diagram',
-    meta: 'Web Export · 9 Drafts',
-  },
-  {
-    id: 'xcmd-research',
-    src: './demos/xcmd-research/session.json',
-    agent: 'WorkBuddy',
-    agentTone: 'workbuddy',
-    label: 'x-cmd Research',
-    meta: '4 Parallel Sub-Agents',
-  },
-]
-
-const demoTabsHtml = demos.map((demo, idx) => `
-          <button
-            type="button"
-            class="showcase-demo-tab${idx === 0 ? ' is-active' : ''}"
-            role="tab"
-            aria-selected="${idx === 0 ? 'true' : 'false'}"
-            data-demo-id="${demo.id}"
-          >
-            <span class="showcase-agent-badge is-${demo.agentTone}">${demo.agent}</span>
-            <span class="showcase-demo-text">
-              <strong>${demo.label}</strong>
-              <small>${demo.meta}</small>
-            </span>
-          </button>`).join('')
 
 const html = `<!doctype html>
 <html lang="en">
@@ -273,13 +216,14 @@ const html = `<!doctype html>
       color: #334155;
       cursor: pointer;
       text-align: left;
+      text-decoration: none;
       transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
     }
     .showcase-demo-tab:hover {
       border-color: #cbd5e1;
       background: #ffffff;
     }
-    .showcase-demo-tab.is-active {
+    .showcase-demo-tab[aria-current="page"] {
       border-color: #0f172a;
       background: #ffffff;
       color: #0f172a;
@@ -330,6 +274,8 @@ const html = `<!doctype html>
       color: #64748b;
       white-space: nowrap;
     }
+    #showcase-language { cursor: pointer; }
+    #watch-film { color: #334155; font-size: 13px; }
     .showcase-stage {
       flex: 1;
       display: flex;
@@ -358,111 +304,50 @@ const html = `<!doctype html>
         <div class="showcase-title-row">
           <a class="showcase-logo" href="https://github.com/niracler/encore" target="_blank" rel="noopener">ENCORE</a>
           <span class="showcase-version">v${pkg.version}</span>
-          <p class="showcase-tagline">Bring your AI agent sessions back on stage — like asciinema, for AI Agents.</p>
+          <p class="showcase-tagline" data-text="tagline">Bring your AI agent sessions back on stage — like asciinema, for AI Agents.</p>
         </div>
       </div>
       <div class="showcase-actions">
-        <div class="showcase-cmd" role="region" aria-label="Quick start command">
+        <div class="showcase-cmd" role="region" aria-label="Quick start command" data-label="command">
           <span class="showcase-cmd-prompt">$</span>
           <code id="encore-cli-cmd">npx @niracler/encore@latest</code>
-          <button type="button" class="showcase-copy-btn" id="encore-copy-btn" aria-label="Copy CLI command">Copy</button>
+          <button type="button" class="showcase-copy-btn" id="encore-copy-btn" aria-label="Copy CLI command" data-label="copyCommand" data-text="copy">Copy</button>
         </div>
+        <button type="button" id="showcase-language" class="showcase-link" lang="zh-CN">中文</button>
         <a class="showcase-link" href="https://github.com/niracler/encore" target="_blank" rel="noopener">GitHub ↗</a>
         <a class="showcase-link" href="https://www.npmjs.com/package/@niracler/encore" target="_blank" rel="noopener">npm ↗</a>
       </div>
     </div>
   </header>
-  <nav class="showcase-switcher" aria-label="Live replay demos">
+  <nav class="showcase-switcher" aria-label="Live replay demos" data-label="cases">
     <div class="showcase-switcher-inner">
-      <span class="showcase-switcher-label">Live Cases</span>
-      <div class="showcase-demo-tabs" role="tablist">${demoTabsHtml}
+      <span class="showcase-switcher-label" data-text="cases">Live Cases</span>
+      <div class="showcase-demo-tabs">
+        <a class="showcase-demo-tab" href="?demo=ai-tree-1014" data-case="ai-tree-1014">
+          <span class="showcase-agent-badge is-claude-ai">Claude.ai</span>
+          <span class="showcase-demo-text"><strong data-text="first">70 Years of AI · First cut</strong><small data-text="firstMeta">From idea to preview</small></span>
+        </a>
+        <a class="showcase-demo-tab" href="?demo=ai-tree-1015" data-case="ai-tree-1015">
+          <span class="showcase-agent-badge is-claude-ai">Claude.ai</span>
+          <span class="showcase-demo-text"><strong data-text="final">70 Years of AI · Final cut</strong><small data-text="finalMeta">Revising after feedback</small></span>
+        </a>
+        <a class="showcase-demo-tab" href="?demo=lesson-00-buyers-codex" data-case="lesson-00-buyers-codex">
+          <span class="showcase-agent-badge is-codex">Codex</span>
+          <span class="showcase-demo-text"><strong data-text="buyers">Overseas lighting buyers</strong><small data-text="codexBuyersMeta">Three markets · 26 leads</small></span>
+        </a>
+        <a class="showcase-demo-tab" href="?demo=lesson-00-buyers-workbuddy" data-case="lesson-00-buyers-workbuddy">
+          <span class="showcase-agent-badge is-workbuddy">WorkBuddy</span>
+          <span class="showcase-demo-text"><strong data-text="buyers">Overseas lighting buyers</strong><small data-text="workbuddyBuyersMeta">Retrying tasks · 32 leads</small></span>
+        </a>
       </div>
+      <a id="watch-film" href="https://ai-literacy-series.pages.dev/videos/ai-tree/" data-text="film">Watch the film</a>
     </div>
   </nav>
   <main class="showcase-stage">
     <div id="encore-showcase-player"></div>
   </main>
   <script src="./encore-player.js" defer></script>
-  <script>
-    const SHOWCASE_DEMOS = ${JSON.stringify(demos)};
-    const demoMap = new Map(SHOWCASE_DEMOS.map(d => [d.id, d]));
-    let activePlayer = null;
-    let activeDemoId = null;
-    let loadSeq = 0;
-
-    function getDemoFromLocation() {
-      const params = new URLSearchParams(window.location.search);
-      const id = params.get('demo');
-      return demoMap.has(id) ? id : SHOWCASE_DEMOS[0].id;
-    }
-
-    function getLangFromLocation() {
-      const lang = new URLSearchParams(window.location.search).get('lang');
-      return lang === 'en' || lang === 'zh' ? lang : undefined;
-    }
-
-    function syncTabs(demoId) {
-      let activeBtn = null;
-      document.querySelectorAll('[data-demo-id]').forEach(btn => {
-        const isActive = btn.dataset.demoId === demoId;
-        btn.classList.toggle('is-active', isActive);
-        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
-        if (isActive) activeBtn = btn;
-      });
-      activeBtn?.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' });
-    }
-
-    async function loadDemo(demoId, { pushUrl = false } = {}) {
-      const demo = demoMap.get(demoId) || SHOWCASE_DEMOS[0];
-      if (demo.id === activeDemoId && activePlayer) return;
-      activeDemoId = demo.id;
-      syncTabs(demo.id);
-
-      if (pushUrl) {
-        const url = new URL(window.location.href);
-        if (demo.id === SHOWCASE_DEMOS[0].id) url.searchParams.delete('demo');
-        else url.searchParams.set('demo', demo.id);
-        window.history.pushState({ demo: demo.id }, '', url);
-      }
-
-      const mountEl = document.getElementById('encore-showcase-player');
-      if (!mountEl || !window.EncorePlayer) return;
-      const seq = ++loadSeq;
-      activePlayer?.getController()?.destroy();
-      activePlayer = null;
-
-      try {
-        const lang = getLangFromLocation();
-        const player = await window.EncorePlayer.create(mountEl, demo.src, lang ? { lang } : {});
-        if (seq !== loadSeq) {
-          player?.getController()?.destroy();
-          return;
-        }
-        activePlayer = player;
-      } catch (err) {
-        if (seq === loadSeq) {
-          mountEl.innerHTML = '<div class="encore-load-error">Failed to load demo replay.</div>';
-        }
-      }
-    }
-
-    window.addEventListener('DOMContentLoaded', () => {
-      document.querySelectorAll('[data-demo-id]').forEach(btn => {
-        btn.addEventListener('click', () => loadDemo(btn.dataset.demoId, { pushUrl: true }));
-      });
-      window.addEventListener('popstate', () => loadDemo(getDemoFromLocation(), { pushUrl: false }));
-      loadDemo(getDemoFromLocation(), { pushUrl: false });
-    });
-
-    document.getElementById('encore-copy-btn')?.addEventListener('click', async function () {
-      try {
-        await navigator.clipboard.writeText('npx @niracler/encore@latest')
-        const prev = this.textContent
-        this.textContent = 'Copied!'
-        setTimeout(() => { this.textContent = prev }, 1600)
-      } catch {}
-    })
-  </script>
+  <script type="module" src="./showcase.js"></script>
 </body>
 </html>
 `

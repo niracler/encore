@@ -162,7 +162,7 @@ function extractStepDocs(toolItems, stepIndex) {
   return [...byPath.values()]
 }
 
-function extractStepSubagents(toolItems, stepIndex) {
+function extractStepSubagents(toolItems, stepIndex, t) {
   const list = []
   toolItems.forEach((item, idx) => {
     const rawSum = String(item.summary || '')
@@ -188,17 +188,17 @@ function extractStepSubagents(toolItems, stepIndex) {
     const combined = `${rawSum}\n${item.output || ''}`
     const isAsyncSpawn = /^(?:spawn_agent|collaboration__spawn_agent|followup_task|collaboration__followup_task)$/.test(item.name || '')
     let state = 'sent'
-    let badge = '派出'
+    let badge = t('agentSent')
     let report = ''
     if (/was stopped|中途打断|已取消/i.test(combined)) {
       state = 'stopped'
-      badge = '已叫停'
+      badge = t('agentStopped')
     } else if (/failed:|terminated early|rate_limit|hit your session limit|^Error:\s*Failed/im.test(combined)) {
       state = 'failed'
-      badge = /limit|429/i.test(combined) ? '额度中断' : '失败'
+      badge = /limit|429/i.test(combined) ? t('agentRateLimited') : t('agentFailed')
     } else if (item.kind === 'reply' || item.stats?.reply || (!isAsyncSpawn && item.output && item.output.length > 80 && !item.output.trim().startsWith('{'))) {
       state = 'done'
-      badge = '已交回'
+      badge = t('agentDone')
       if (item.output && item.output.length > 40 && !item.output.trim().startsWith('{')) {
         report = String(item.output).trim()
       }
@@ -572,7 +572,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
         name,
         color,
         itemCount: records.length,
-        count: `${records.length} Items`,
+        count: t('itemCount', { n: records.length }),
         tok: `≈${(curTok / 1000).toFixed(1)}k`,
         pct: `${kindPct(curTok)}%`,
         delta: stepIdx >= 0 ? fmtCountDelta(records.length, prevCount) : '',
@@ -682,8 +682,8 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
         id: `user-${userSeq}`,
         stepIndex: index,
         tokEst: userTok,
-        tag: `Turn #${turnCount}`,
-        title: cleanPromptText.slice(0, 56) || 'User message',
+        tag: t('turnTag', { n: turnCount }),
+        title: cleanPromptText.slice(0, 56) || t('userMessage'),
         meta: `≈${(userTok / 1000).toFixed(1)}k · ${stepTime}s`,
         payload: String(first.text || ''),
         ...(first.images?.length ? { images: first.images } : {}),
@@ -700,7 +700,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
             tokEst: skTok,
             tag: 'SKILL.md',
             title: `${skill}/SKILL.md`,
-            meta: `≈${(skTok / 1000).toFixed(1)}k · Turn #${turnCount}`,
+            meta: `≈${(skTok / 1000).toFixed(1)}k · ${t('turnTag', { n: turnCount })}`,
             payload: `# ${skill} (SKILL.md)\nLoaded into active context.`,
           }))
         }
@@ -709,10 +709,10 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
       primaryCat = 'user'
       speedLabel = '1.0×'
       dwellMs = 1500
-      detailTitle = `Prompt #${turnCount}`
+      detailTitle = t('promptTitle', { n: turnCount })
       detailSnippet = (first.text || '').slice(0, 260)
-      inBrief = 'User message appended to context'
-      responseBrief = 'Waiting for Agent reasoning & tool calls'
+      inBrief = t('appendedPrompt')
+      responseBrief = t('waitingForTools')
     } else if (group.groupType === 'compact') {
       compactSeq++
       const cItem = first
@@ -765,10 +765,10 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
       speedLabel = '0.8×'
       dwellMs = 2100
       spotlight = 'context-compact'
-      detailTitle = `Context Compaction #${compactInfo.seq}`
+      detailTitle = t('compactTitle', { seq: compactInfo.seq })
       detailSnippet = summaryText.slice(0, 260)
       inBrief = `${(preTokens / 1000).toFixed(1)}k → ${(postTokens / 1000).toFixed(1)}k`
-      responseBrief = `Archived ${archivedTools} tool outputs (-${(droppedTokens / 1000).toFixed(1)}k tokens)`
+      responseBrief = t('archivedTools', { n: archivedTools, tokens: (droppedTokens / 1000).toFixed(1) })
     } else if (group.groupType === 'assistant') {
       msgSeq++
       const cleanReply = (first.text || '').replace(/\s+/g, ' ').trim()
@@ -779,8 +779,8 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
         id: `msg-${msgSeq}`,
         stepIndex: index,
         tokEst: msgTok,
-        tag: `Reply #${msgSeq}`,
-        title: cleanReply.slice(0, 56) || 'Assistant reply',
+        tag: t('replyTag', { n: msgSeq }),
+        title: cleanReply.slice(0, 56) || t('assistantReply'),
         meta: `≈${(msgTok / 1000).toFixed(1)}k · ${stepTime}s`,
         payload: String(first.text || ''),
       }))
@@ -794,17 +794,17 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
       primaryCat = 'msg'
       speedLabel = '1.0×'
       dwellMs = 1750
-      detailTitle = 'Assistant Response'
+      detailTitle = t('assistantReply')
       detailSnippet = (first.text || '').slice(0, 260)
-      inBrief = allTools.length ? `Synthesizing (${allTools.slice(-2).join(', ')})` : 'Direct response'
-      responseBrief = cleanReply.slice(0, 96) || 'Completed response'
+      inBrief = allTools.length ? t('synthesizing', { tools: allTools.slice(-2).join(', ') }) : t('directResponse')
+      responseBrief = cleanReply.slice(0, 96) || t('completedResponse')
     } else {
       const toolItems = group.items.filter(item => item.type === 'tool')
       const reasoningItems = group.items.filter(item => item.type === 'reasoning')
       const stats = sumStats(toolItems)
       const extracted = extractFileChips(toolItems)
       stepDocs = extractStepDocs(toolItems, index)
-      stepSubagents = extractStepSubagents(toolItems, index)
+      stepSubagents = extractStepSubagents(toolItems, index, t)
       stepAudios = extractStepAudios(toolItems, t)
       allTools.push(...extracted.tools)
       allChanges.push(...extracted.changes)
@@ -819,9 +819,9 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
             id: `mem-dyn-${memRecords.length + 1}`,
             stepIndex: index,
             tokEst: memTok,
-            tag: 'Rule',
+            tag: t('rule'),
             title: `${memName}`,
-            meta: `≈${(memTok / 1000).toFixed(1)}k · Step ${index + 1}`,
+            meta: `≈${(memTok / 1000).toFixed(1)}k · ${t('stepTag', { n: index + 1 })}`,
             payload: `# ${memName}\nLoaded into context during step ${index + 1}.`,
           }))
         }
@@ -837,9 +837,9 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
           id: `think-${msgSeq}`,
           stepIndex: index,
           tokEst: rTok,
-          tag: 'Thinking',
+          tag: t('thinking'),
           title: rItem.text.replace(/\s+/g, ' ').trim().slice(0, 54),
-          meta: `≈${(rTok / 1000).toFixed(1)}k · Reasoning`,
+          meta: `≈${(rTok / 1000).toFixed(1)}k · ${t('reasoning')}`,
           payload: String(rItem.text),
         }))
       }
@@ -865,7 +865,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
               tokEst: skTok,
               tag: 'SKILL.md',
               title: `${skill}/SKILL.md`,
-              meta: `≈${(skTok / 1000).toFixed(1)}k · Step ${index + 1}`,
+              meta: `≈${(skTok / 1000).toFixed(1)}k · ${t('stepTag', { n: index + 1 })}`,
               payload: String(item.output || item.input || `# ${skill} (SKILL.md)`),
             }))
           }
@@ -905,7 +905,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
           toolRecords.push(registerRecord({
             id: `frame-${++toolSeq}`,
             stepIndex: index,
-            tag: 'Preview',
+            tag: t('preview'),
             title: `${fr.label}`,
             meta: '≈1.2k tok',
             payload: `Preview frame: ${fr.label}`,
@@ -913,7 +913,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
           }))
         }
         rawMontage.push({
-          tag: 'Preview',
+          tag: t('preview'),
           title: `${fr.label}`,
           isSpot: true,
           speed: '🖼',
@@ -921,7 +921,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
       }
       for (const doc of stepDocs) {
         rawMontage.push({
-          tag: 'Draft',
+          tag: t('draft'),
           title: `${doc.title}`,
           isSpot: true,
           speed: '📄',
@@ -968,7 +968,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
         dwellMs = 1100
       }
       if (toolItems.length) {
-        detailTitle = `Tool Call × ${toolItems.length}`
+        detailTitle = t('toolCalls', { n: toolItems.length })
         detailSnippet = toolItems.slice(0, 3).map(item => item.summary).join('\n')
         const primaryTool = toolItems[0]?.name || 'tool'
         inBrief = `${primaryTool} · ${toolItems.slice(0, 2).map(i => i.summary).join('；')}`
@@ -1059,7 +1059,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
           snippet: detailSnippet,
         },
         brief: {
-          user: latestUserPrompt || 'Session Start',
+          user: latestUserPrompt || t('sessionStart'),
           in: inBrief,
           response: responseBrief,
         },

@@ -583,7 +583,7 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
             : shorten(s.summary || t('tlStepFallback'), 24)
     const tokStr = `${((s.contextSnapshot?.totalTokens || 0) / 1000).toFixed(1)}k`
     tlPop.style.left = `${pct.toFixed(1)}%`
-    tlPop.innerHTML = `${thumbHtml}<span class="session-tl-pop-meta"><small>${escapeHtml(t('tlStepMeta', { step: idx + 1, time: elapsedClock(s.t) }))}</small><b>${escapeHtml(headTitle)}</b><span>Context ≈${escapeHtml(tokStr)}</span></span>`
+    tlPop.innerHTML = `${thumbHtml}<span class="session-tl-pop-meta"><small>${escapeHtml(t('tlStepMeta', { step: idx + 1, time: elapsedClock(s.t) }))}</small><b>${escapeHtml(headTitle)}</b><span>${escapeHtml(t('contextLabel'))} ≈${escapeHtml(tokStr)}</span></span>`
     tlPop.hidden = false
   }
 
@@ -1279,7 +1279,7 @@ export async function createEncorePlayer(targetEl, sourceOrSession, options = {}
     if (activeController) activeController.destroy()
     activeLang = resolveLang(lang)
     const line = timeline(session, { lang: activeLang })
-    el.innerHTML = renderPlayerWidget(session, line, { lang: activeLang, baseUrl })
+    el.innerHTML = renderPlayerWidget(session, line, { lang: activeLang, baseUrl, showLangToggle: options.showLangToggle })
     if (session.title && document.querySelectorAll('[data-encore-player]').length <= 1) {
       document.title = `${session.title} · Encore`
     }

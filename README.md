@@ -28,11 +28,19 @@
 
 ## Live Demos
 
-Explore five real sessions across all four supported agents at **[encore.niracler.com](https://encore.niracler.com)** (includes an instant `EN / 中文` UI toggle in the top-right corner):
+The homepage features four replays. The first two follow the making of *70 Years of AI*, opening on the first cut. The other two show how Codex and WorkBuddy handled the same buyer research brief. Switch between English and Chinese for the interface and case introductions. Conversations stay in their original language.
 
 | Demo | Agent | Highlights |
 | :--- | :--- | :--- |
-| [Design & Ship Encore](https://encore.niracler.com/) | **Codex** | English walkthrough of building Encore, with Context X-Ray, compaction, and sub-agents |
+| [70 Years of AI · First cut](https://encore.niracler.com/?lang=en) | **Claude.ai** | Seven sub-agents help research and script a 4-minute, 10-second preview |
+| [70 Years of AI · Final cut](https://encore.niracler.com/?demo=ai-tree-1015&lang=en) | **Claude.ai** | Viewer feedback shapes the photos and glossary in the landscape and portrait releases |
+| [Overseas lighting buyers](https://encore.niracler.com/?demo=lesson-00-buyers-codex&lang=en) | **Codex** | Three sub-agents research three markets and identify 26 prospective buyers |
+| [Overseas lighting buyers](https://encore.niracler.com/?demo=lesson-00-buyers-workbuddy&lang=en) | **WorkBuddy** | Three tasks hit a quota limit and are reassigned before delivery of a 32-company shortlist |
+
+Other replays are available by direct link.
+
+| Demo | Agent | Highlights |
+| :--- | :--- | :--- |
 | [Poster Redesign](https://encore.niracler.com/?demo=poster-redesign) | **Codex** | Visual poster iteration across 7 `.webp` frames plus a live auto-compaction boundary |
 | [Site Integration](https://encore.niracler.com/?demo=work-stages-site) | **Claude Code** | 4 sub-agents, 5 visual frames, and a live debugging fix for a broken page script |
 | [7-Stage Diagram Redesign](https://encore.niracler.com/?demo=work-stages-design) | **Claude.ai** | Web export (`conversations.json`) exploring 5 layout directions across 9 drafts |
