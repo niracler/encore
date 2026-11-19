@@ -20,6 +20,7 @@ export function buildStandalonePlayerJs({ write = true } = {}) {
     'i18n.mjs',
     'markdown.mjs',
     'timeline.mjs',
+    'attachment-reader.mjs',
     'render.mjs',
     'player-runtime.mjs',
   ]

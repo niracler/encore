@@ -1,4 +1,5 @@
 import { createTranslator, resolveLang } from './i18n.mjs'
+import { attachAttachmentReaders } from './attachment-reader.mjs'
 import { escapeHtml } from './markdown.mjs'
 import { buildPlayerData, elapsedClock, renderPlayerWidget, wallClock } from './render.mjs'
 import { timeline } from './timeline.mjs'
@@ -356,7 +357,36 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
   }
 
   if (play) play.hidden = false
+  attachAttachmentReaders(containerEl, t, () => { if (playing) setPlaying(false) })
   if (log) log.classList.add('is-staged')
+  for (const formats of containerEl.querySelectorAll('.session-video-formats')) {
+    const figure = formats.closest('figure')
+    const video = figure.querySelector('video')
+    formats.addEventListener('click', async event => {
+      const button = event.target.closest('[data-video-format]')
+      if (!button || button.getAttribute('aria-pressed') === 'true') return
+      const time = video.currentTime
+      const resume = !video.paused && !video.ended
+      formats.querySelector('[aria-pressed="true"]').setAttribute('aria-pressed', 'false')
+      button.setAttribute('aria-pressed', 'true')
+      video.dataset.format = button.dataset.videoFormat
+      if (button.dataset.cover) video.poster = button.dataset.cover
+      else video.removeAttribute('poster')
+      video.preload = time > 0 ? 'metadata' : 'none'
+      video.src = button.dataset.src
+      video.load()
+      if (time > 0) video.currentTime = time
+      figure.scrollIntoView({ block: 'nearest' })
+      if (resume) {
+        try {
+          await video.play()
+        } catch (error) {
+          // Switching again or pausing can interrupt the pending play request.
+          if (error.name !== 'AbortError') throw error
+        }
+      }
+    })
+  }
   if (scrubber) {
     scrubber.classList.add('is-ready')
     scrubber.removeAttribute('aria-hidden')
@@ -1036,6 +1066,9 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
       if (!future) latestVisibleEntry = item.entry
     }
     for (const aux of auxEntries) {
+      if (aux.forStep > playHead && aux.entry.matches('.session-files:not(.is-future)')) {
+        aux.entry.querySelectorAll('video').forEach(video => video.pause())
+      }
       aux.entry.classList.toggle('is-future', aux.forStep > playHead)
     }
 
@@ -1163,8 +1196,8 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
   })
 
   const onKeyDown = event => {
-    if (lightbox?.open || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
-    if (event.target.closest('input, textarea, select, a, audio, video, summary, [contenteditable]')) return
+    if (lightbox?.open || event.target.closest('dialog[open]') || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
+    if (event.target.closest('input, textarea, select, a, audio, video, .session-video-formats, summary, [contenteditable]')) return
     if (event.key === ' ' && event.target.closest('button')) return
     if (event.key === 'ArrowLeft') {
       setPlaying(false)
@@ -1306,7 +1339,19 @@ export async function autoMountEncorePlayers() {
     if (node.dataset.encoreMounted) continue
     node.dataset.encoreMounted = '1'
     try {
-      await createEncorePlayer(node)
+      const player = await createEncorePlayer(node)
+      const showLinkedDelivery = () => {
+        const match = /^#delivery-(\d+)$/.exec(location.hash)
+        const files = match ? node.querySelector(`[data-delivery="${match[1]}"]`)
+          : location.hash === '#deliverables' && [...node.querySelectorAll('[data-delivery]')].at(-1)
+        if (!files) return
+        const controller = player.getController()
+        controller.setPlaying(false)
+        controller.goToStage(Number(files.dataset.forStep), false)
+        files.scrollIntoView({ block: 'start' })
+      }
+      showLinkedDelivery()
+      window.addEventListener('hashchange', showLinkedDelivery)
     } catch (err) {
       node.innerHTML = `<div class="encore-load-error">Failed to load session replay: ${escapeHtml(err.message || String(err))}</div>`
     }

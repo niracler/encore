@@ -30,7 +30,7 @@ const englishGuides = new Map([
   ['ai-tree-1015', {
     title: '70 Years of AI · Revising the final cut',
     description: 'Feedback on the first cut led to more historical photos and a visual glossary in place of the on-screen term counter. The session ends with a 5-minute, 14-second film in landscape and portrait.',
-    deliverables: [{ title: 'Watch 70 Years of AI', meta: '5 min 14 sec · Landscape and portrait' }],
+    deliverables: [{ title: '70 Years of AI', meta: '5 min 14 sec' }],
   }],
   ['lesson-00-buyers-codex', {
     title: 'Codex researches overseas lighting buyers',
@@ -78,6 +78,7 @@ let lang = ['en', 'zh'].includes(requestedLang)
 const languageButton = document.querySelector('#showcase-language')
 const copyButton = document.querySelector('#encore-copy-btn')
 const mount = document.querySelector('#encore-showcase-player')
+const filmLink = document.querySelector('#watch-film')
 let session
 let player
 let copyTimer
@@ -92,12 +93,14 @@ function renderPage() {
   const cases = document.querySelectorAll('[data-case]')
   for (const link of cases) {
     const target = new URL(location.href)
+    target.hash = ''
     target.searchParams.set('demo', link.dataset.case)
     target.searchParams.set('lang', lang)
     link.href = target
     if (link.dataset.case === demoId) link.setAttribute('aria-current', 'page')
   }
-  document.querySelector('#watch-film').hidden = !['ai-tree-1014', 'ai-tree-1015'].includes(demoId)
+  filmLink.hidden = !['ai-tree-1014', 'ai-tree-1015'].includes(demoId)
+  filmLink.href = `?demo=ai-tree-1015&lang=${lang}#film`
   document.querySelector('[data-case][aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   const error = mount.querySelector('.encore-load-error')
   if (error) error.textContent = messages.loadError
@@ -126,6 +129,21 @@ async function renderReplay() {
   mount.querySelectorAll('.session-you .session-bubble, .session-ai-body').forEach(el => { el.lang = 'zh-CN' })
 }
 
+function showFilm() {
+  const video = mount.querySelector('.session-files video')
+  const controller = player.getController()
+  controller.setPlaying(false)
+  controller.goToStage(Number(video.closest('[data-for-step]').dataset.forStep), false)
+  video.focus({ preventScroll: true })
+  video.closest('figure').scrollIntoView({ block: 'center' })
+}
+
+filmLink.addEventListener('click', event => {
+  if (demoId !== 'ai-tree-1015' || !player || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return
+  event.preventDefault()
+  showFilm()
+})
+
 languageButton.addEventListener('click', async () => {
   lang = lang === 'en' ? 'zh' : 'en'
   url.searchParams.set('lang', lang)
@@ -151,6 +169,7 @@ try {
   if (!response.ok) throw new Error('HTTP ' + response.status)
   session = await response.json()
   await renderReplay()
+  if (demoId === 'ai-tree-1015' && url.hash === '#film') showFilm()
 } catch (error) {
   console.error(error)
   const message = document.createElement('p')

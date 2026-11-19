@@ -340,7 +340,7 @@ const html = `<!doctype html>
           <span class="showcase-demo-text"><strong data-text="buyers">Overseas lighting buyers</strong><small data-text="workbuddyBuyersMeta">Retrying tasks · 32 leads</small></span>
         </a>
       </div>
-      <a id="watch-film" href="https://ai-literacy-series.pages.dev/videos/ai-tree/" data-text="film">Watch the film</a>
+      <a id="watch-film" href="?demo=ai-tree-1015#film" data-text="film">Watch the film</a>
     </div>
   </nav>
   <main class="showcase-stage">

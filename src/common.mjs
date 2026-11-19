@@ -1,6 +1,7 @@
 import { createReadStream } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
+import { fileReferences, messageReferences } from './external-files.mjs'
 
 export const tools = {
   codex: 'Codex',
@@ -116,11 +117,12 @@ export function isoTime(value) {
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
 }
 
-export function mentions(text) {
+export function mentions(text, references = []) {
   const files = []
   const request = String(text)
     .replace(/(^|\s)@(?:"([^"]+)"|(~?[/\\][^\s"]+))/g, (whole, space, quoted, bare) => {
       const name = (quoted || bare).split(/[/\\]/).pop()
+      references.push(quoted || bare)
       files.push(attachmentLabel(name))
       return space === '\n' ? space : ''
     })
@@ -288,15 +290,22 @@ export function createTranscript() {
   }
   return {
     items,
-    user(text, time, { images = [], ...extra } = {}) {
+    user(text, time, { images = [], references = [], cwd, ...extra } = {}) {
       text = String(text ?? '').trim() || (images.length ? '[图片]' : '')
+      const files = fileReferences([...references, ...messageReferences(text)], cwd)
+      if (files.length) extra.deliverables = [...(extra.deliverables || []), ...files]
       if (text) add({ type: 'user', text, time, ...extra, images: images.length ? images : undefined })
     },
-    assistant(text, time, { key, ...extra } = {}) {
+    assistant(text, time, { key, cwd, ...extra } = {}) {
       text = String(text ?? '').trim()
       if (!text) return
       const last = items.at(-1)
-      if (key && last?.type === 'assistant' && last.key === key) last.text += `\n\n${text}`
+      const files = fileReferences(messageReferences(text), cwd)
+      if (files.length) extra.deliverables = files
+      if (key && last?.type === 'assistant' && last.key === key) {
+        last.text += `\n\n${text}`
+        if (files.length) last.deliverables = [...(last.deliverables || []), ...files]
+      }
       else add({ type: 'assistant', text, time, key, ...extra })
     },
     reasoning(text, time) {
@@ -311,13 +320,24 @@ export function createTranscript() {
     compact(info, time) {
       return add({ type: 'compact', ...info, time })
     },
-    result(id, output, time, images = []) {
+    result(id, output, time, images = [], cwd) {
       const item = id ? calls.get(id) : items.findLast(entry => entry.type === 'tool' && !entry.output)
       if (!item) return
       if (time) item.done = time
       output = String(output ?? '').trim()
       if (output) item.output = item.output ? `${item.output}\n${output}` : output
       if (images.length) item.images = [...(item.images || []), ...images]
+      const name = item.name?.split('__').at(-1)
+      if (name === 'present_files' || name === 'SendUserFile') {
+        const result = parseArguments(output)
+        const args = parseArguments(item.input)
+        const entries = result?.type === 'present_files_result' ? result.files
+          : name === 'SendUserFile' && /\b\d+ files? delivered to user\b/i.test(output) ? args?.files : undefined
+        if (Array.isArray(entries)) {
+          const files = fileReferences(entries, args?.cwd || cwd)
+          if (files.length) item.deliverables = files
+        }
+      }
     },
     finish({ tool, model, title, description = '', deliverables = [], tokens, contextWindow, initialContext }) {
       for (const item of items) delete item.key

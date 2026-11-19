@@ -30,13 +30,28 @@ export interface SessionFrame {
 
 export interface SessionDeliverable {
   title: string
+  source?: { path: string; sha256?: string }
+  sessionSha256?: string
+  availability?: 'verified' | 'export-copy' | 'missing'
+  unavailableReason?: 'outside-root' | 'unreadable'
   href?: string
   meta?: string
   cover?: string
+  portrait?: { href: string; cover?: string }
+  previewSheet?: string
+  previewColumns?: string[]
+  revision?: { href: string; label: string } & (
+    { page: number; linePrefix: string } | { sheet: string; cell: string }
+  )
+  preview?: { change?: { before: string; after: string } } & (
+    { type: 'pdf'; pages: { src: string; width: number; height: number }[] }
+    | { type: 'xlsx'; src: string; sheet: string; count: number; rows: string[][] }
+  )
 }
 
 export interface SessionItem {
   type: 'user' | 'assistant' | 'reasoning' | 'tool' | 'compact'
+  deliverables?: SessionDeliverable[]
   text?: string
   time?: string
   done?: string
@@ -85,6 +100,7 @@ export interface PrivacyLeak {
 }
 
 export interface BuildReplayOptions {
+  assetRoots?: string[]
   tool?: AgentToolId
   outDir?: string
   lang?: PlayerLang | 'auto'
@@ -153,7 +169,7 @@ export function importRawSession(
 
 export function rebuildReplayDir(
   dirOrSessionFile: string,
-  options?: Pick<BuildReplayOptions, 'lang' | 'title' | 'description'>
+  options?: Pick<BuildReplayOptions, 'lang' | 'title' | 'description' | 'assetRoots'>
 ): Promise<BuildReplayResult>
 
 export function buildReplay(

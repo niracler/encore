@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -58,6 +59,85 @@ test('timeline and renderPlayerWidget support both zh and en bilingual modes', (
   assert.match(htmlEn, /Active Context/)
   assert.match(htmlEn, /Context Compaction #1/)
   assert.match(htmlEn, /▶ Play/)
+})
+
+test('handoffs belong to their exact reply or tool step and legacy files remain at the end', () => {
+  const session = structuredClone(sampleSession)
+  session.items[2].deliverables = [{ title: 'Sent workbook', href: 'leads.xlsx' }]
+  session.items.at(-1).deliverables = [{ title: 'Review copy', href: 'report.pdf' }]
+  session.deliverables = [{ title: 'Final copy', href: 'final.pdf' }]
+  const line = timeline(session)
+  const html = renderPlayerWidget(session, line)
+  const tool = line.steps.findIndex(step => step.t === 15)
+  assert.ok(tool > 0)
+  assert.equal(line.steps[tool + 1].t, 60)
+  const sections = [...html.matchAll(/<li class="session-entry session-ai session-files"[^>]*data-for-step="(\d+)"[^>]*>([\s\S]*?)<\/li>/g)]
+  assert.deepEqual(sections.map(match => Number(match[1])), [tool, line.steps.length - 1, line.steps.length - 1])
+  for (const [i, title] of ['Sent workbook', 'Review copy', 'Final copy'].entries()) assert.ok(sections[i][2].includes(title))
+  assert.ok(sections[2][0].includes('data-final-files'))
+})
+
+test('export captures external handoffs, verifies only recorded digests, and preserves missing references', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'encore-external-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const dir = join(root, 'replay')
+  const log = join(root, 'workbuddy.jsonl')
+  const time = '2026-10-10T15:00:00.000Z'
+  const bytes = 'original report'
+  const digest = createHash('sha256').update(bytes).digest('hex')
+  writeFileSync(join(root, 'report.txt'), bytes)
+  const files = [{ path: 'report.txt', sha256: digest }, 'gone.txt']
+  const records = [
+    { type: 'message', role: 'user', cwd: root, timestamp: time, content: '<user_query>@"' + join(root, 'input.pdf') + '" Review the report</user_query>' },
+    { type: 'function_call', callId: 'handoff', name: 'present_files', arguments: JSON.stringify({ files: files.map(f => f.path || f), cwd: root }), timestamp: time },
+    { type: 'function_call_result', callId: 'handoff', timestamp: time, output: JSON.stringify({ type: 'present_files_result', files }) },
+    { type: 'message', role: 'assistant', cwd: root, timestamp: time, content: '[Report](report.txt)' },
+  ]
+  writeFileSync(log, records.map(row => JSON.stringify(row)).join('\n'))
+  const exported = await buildReplay(log, { tool: 'workbuddy', outDir: dir, assetRoots: [root] })
+  const [input, handoff, reply] = exported.session.items
+  const [verified, missing] = handoff.deliverables
+  assert.equal(input.deliverables[0].availability, 'missing')
+  assert.equal(verified.availability, 'verified')
+  assert.equal(verified.sessionSha256, digest)
+  assert.deepEqual(missing, { title: 'gone.txt', availability: 'missing' })
+  assert.equal(reply.deliverables[0].availability, 'export-copy')
+  assert.equal(reply.deliverables[0].href, verified.href)
+  assert.equal(readFileSync(join(dir, verified.href), 'utf8'), bytes)
+  assert.equal(verified.source, undefined)
+  const html = renderPlayerWidget(exported.session, undefined, { lang: 'zh' })
+  assert.match(html, /<strong>gone\.txt<\/strong><small>未找到原文件，无法回看<\/small>/)
+  assert.ok(html.includes('已收录导出时的版本，无法确认是否与会话当时一致'))
+  rmSync(join(root, 'report.txt'))
+  const rebuilt = await buildReplay(dir)
+  assert.equal(rebuilt.session.items[1].deliverables[0].availability, 'verified')
+  writeFileSync(join(dir, verified.href), 'changed after export')
+  const altered = await buildReplay(dir)
+  assert.equal(altered.session.items[1].deliverables[0].availability, 'export-copy')
+  assert.ok(renderPlayerWidget(altered.session, undefined, { lang: 'zh' }).includes('与会话记录的校验值不符'))
+})
+
+test('workbook previews preserve tab order and compare the requested Excel cell', async t => {
+  const { default: ExcelJS } = await import('exceljs')
+  const dir = mkdtempSync(join(tmpdir(), 'encore-workbook-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  for (const [name, value] of [['before', '经销商'], ['after', '分销商']]) {
+    const book = new ExcelJS.Workbook()
+    const sheet = book.addWorksheet('名单')
+    book.addWorksheet('说明').getCell('A1').value = '使用说明'
+    sheet.getCell('A1').value = '公司'
+    sheet.getCell('A2').value = 'Example'
+    sheet.getCell('F2').value = value
+    await book.xlsx.writeFile(join(dir, name + '.xlsx'))
+  }
+  const file = { title: '名单', href: 'after.xlsx', revision: { href: 'before.xlsx', label: '公司类型', sheet: '名单', cell: 'F2' } }
+  writeFileSync(join(dir, 'session.json'), JSON.stringify({ ...sampleSession, deliverables: [file] }))
+  const { session } = await buildReplay(dir)
+  const { preview } = session.deliverables[0]
+  assert.deepEqual(preview.change, { before: '经销商', after: '分销商' })
+  const sheets = JSON.parse(readFileSync(join(dir, preview.src), 'utf8'))
+  assert.deepEqual(sheets.map(sheet => sheet.sheet), ['名单', '说明'])
+  assert.equal(sheets[0].data[1][5], '分销商')
 })
 
 test('createSessionPlaybackModel hydrates slim snapshots and steps', () => {

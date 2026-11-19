@@ -1,4 +1,5 @@
 import { createTranslator } from './i18n.mjs'
+import { renderAttachment } from './attachment-reader.mjs'
 import { escapeHtml as escape, renderMarkdown } from './markdown.mjs'
 import { binSeconds, describeStats, minutes, sumStats, timeline } from './timeline.mjs'
 
@@ -326,12 +327,51 @@ function contextSidebar(line, t) {
   </aside>`
 }
 
+function renderDeliverable(file, t, baseUrl) {
+  if (!file.availability) return renderFileContents(file, t, baseUrl)
+  if (file.availability === 'missing') {
+    const notice = { 'outside-root': 'fileOutsideRoot', unreadable: 'fileUnreadable' }[file.unavailableReason] || 'fileMissing'
+    return `<section class="session-file-missing" data-availability="missing"><strong>${escape(file.title)}</strong><small>${escape(t(notice))}</small></section>`
+  }
+  const notice = t(file.availability === 'verified' ? 'fileVerified' : file.sessionSha256 ? 'fileHashMismatch' : 'fileExportCopy')
+  return `<div class="session-file-copy" data-availability="${escape(file.availability)}"><small>${escape(notice)}</small>${renderFileContents(file, t, baseUrl)}</div>`
+}
+
+function renderFileContents(file, t, baseUrl) {
+  if (file.preview?.type === 'xlsx' || file.preview?.pages?.length && file.preview.type === 'pdf') {
+    return renderAttachment(file, t, src => resolveAsset(src, baseUrl))
+  }
+  const href = escape(resolveAsset(file.href, baseUrl))
+  const cover = escape(resolveAsset(file.cover, baseUrl))
+  const title = escape(file.title)
+  const caption = `<b>${title}</b>${file.meta ? `<small>${escape(file.meta)}</small>` : ''}`
+  if (!validVideo.test(file.href)) {
+    if (file.availability) return `<a class="session-file-download" href="${href}" download="${title}">${caption}</a>`
+    return `<a class="session-file" href="${href}" target="_blank" rel="noopener noreferrer">${cover ? `<img src="${cover}" alt="" width="56" height="79" loading="lazy">` : ''}<span>${caption}</span></a>`
+  }
+  const formats = file.portrait?.href ? `<div class="session-video-formats">
+    <button type="button" data-video-format="landscape" data-src="${href}" data-cover="${cover}" aria-pressed="true">${t('landscape')}</button>
+    <button type="button" data-video-format="portrait" data-src="${escape(resolveAsset(file.portrait.href, baseUrl))}" data-cover="${escape(resolveAsset(file.portrait.cover, baseUrl))}" aria-pressed="false">${t('portrait')}</button>
+  </div>` : ''
+  return `<figure class="session-video">
+    <figcaption><span>${caption}</span>${formats}</figcaption>
+    <video controls playsinline loading="lazy" preload="none" width="960" height="540" aria-label="${title}" src="${href}"${cover ? ` poster="${cover}"` : ''}></video>
+  </figure>`
+}
+
 function renderLog(session, line, { t, baseUrl = '' }) {
   const tool = toolLabels[session.tool] || session.tool || 'Agent'
   const render = text => renderMarkdown(localLinks(text))
   const entries = []
   let shown = -Infinity
   let stepIndex = 0
+  let delivery = 0
+
+  function addFiles(files, step, time, atEnd = false, label = 'deliverablesTitle') {
+    if (!files?.length) return
+    const html = files.map(file => renderDeliverable(file, t, baseUrl)).join('')
+    entries.push(`<li class="session-entry session-ai session-files" data-delivery="${++delivery}"${atEnd ? ' data-final-files' : ''} data-for-step="${step}" data-t="${time}"><div class="session-bubble"><span class="session-who">${escape(t(label))}</span>${html}</div></li>`)
+  }
 
   const stamp = (seconds, forStep) => {
     if (seconds - shown < 300) return ''
@@ -387,7 +427,12 @@ function renderLog(session, line, { t, baseUrl = '' }) {
 
   for (const item of line.items) {
     if (item.type === 'tool' || item.type === 'reasoning') {
+      if (item.deliverables?.length) flush()
       work.push(item)
+      if (item.deliverables?.length) {
+        flush()
+        addFiles(item.deliverables, stepIndex - 1, item.t)
+      }
       continue
     }
     flush()
@@ -415,20 +460,10 @@ function renderLog(session, line, { t, baseUrl = '' }) {
     } else {
       entries.push(`${stamp(item.t, stepIndex - 1)}<li class="session-entry session-ai" data-step="${stepIndex - 1}" data-echo-cat="msg" data-kind="reply" data-t="${item.t}"><div class="session-bubble">${item.question ? `<span class="session-who">${escape(t('asksYou', { tool }))}</span>` : ''}<div class="session-ai-body">${render(item.text)}</div>${renderStepArtifacts(stepMeta, { renderMd: render, t, baseUrl })}</div></li>`)
     }
+    addFiles(item.deliverables, stepIndex - 1, item.t, false, item.type === 'user' ? 'inputFiles' : 'deliverablesTitle')
   }
   flush()
-
-  const deliverables = session.deliverables || session.files || []
-  const filesHtml = deliverables.map(file => {
-    const href = escape(resolveAsset(file.href, baseUrl))
-    const cover = file.cover ? escape(resolveAsset(file.cover, baseUrl)) : ''
-    return validVideo.test(file.href)
-      ? `<figure class="session-video"><video controls preload="none" playsinline width="960" height="540"${cover ? ` poster="${cover}"` : ''}><source src="${href}" type="video/mp4"></video><figcaption><b>${escape(file.title)}</b>${file.meta ? `<small>${escape(file.meta)}</small>` : ''}</figcaption></figure>`
-      : `<a class="session-file" href="${href}" target="_blank" rel="noopener noreferrer">${cover ? `<img src="${cover}" alt="" width="56" height="79" loading="lazy">` : ''}<span><b>${escape(file.title)}</b>${file.meta ? `<small>${escape(file.meta)}</small>` : ''}</span></a>`
-  }).join('')
-  if (filesHtml) {
-    entries.push(`<li class="session-entry session-ai session-files" data-for-step="${Math.max(0, line.steps.length - 1)}" data-t="${line.end}"><div class="session-bubble"><span class="session-who">${escape(t('deliverablesTitle'))}</span>${filesHtml}</div></li>`)
-  }
+  addFiles(session.deliverables || session.files, Math.max(0, line.steps.length - 1), line.end, true)
   return `<ol class="session-log">${entries.join('')}</ol>`
 }
 

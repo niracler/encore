@@ -10,10 +10,10 @@ import {
 } from './common.mjs'
 
 // WorkBuddy sessions: ~/.workbuddy/projects/<workspace>/<id>.jsonl, records in OpenAI Responses shape.
-export function workBuddyUserText(content) {
+export function workBuddyUserText(content, references) {
   const text = textOf(content)
   const queries = [...text.matchAll(/<user_query>([\s\S]*?)<\/user_query>/g)].map(match => match[1].trim())
-  return mentions(queries.length ? queries.join('\n\n') : stripInjected(text))
+  return mentions(queries.length ? queries.join('\n\n') : stripInjected(text), references)
 }
 
 export function readWorkBuddy(records) {
@@ -31,15 +31,16 @@ export function readWorkBuddy(records) {
     if (record.type === 'ai-title') {
       title = record.aiTitle
     } else if (record.type === 'message' && record.role === 'user') {
-      transcript.user(workBuddyUserText(record.content), time, { images: imagesOf(record.content) })
+      const references = []
+      transcript.user(workBuddyUserText(record.content, references), time, { images: imagesOf(record.content), references, cwd: record.cwd })
     } else if (record.type === 'message' && record.role === 'assistant') {
-      transcript.assistant(textOf(record.content), time)
+      transcript.assistant(textOf(record.content), time, { cwd: record.cwd })
     } else if (record.type === 'reasoning') {
       transcript.reasoning(textOf(record.rawContent?.length ? record.rawContent : record.content), time)
     } else if (record.type === 'function_call') {
       transcript.tool(record.callId, describeTool(record.name, parseArguments(record.arguments)), time)
     } else if (record.type === 'function_call_result') {
-      transcript.result(record.callId, stripInjected(textOf(record.output)), time, imagesOf(record.output))
+      transcript.result(record.callId, stripInjected(textOf(record.output)), time, imagesOf(record.output), record.cwd)
     }
   }
   const tokens = [...usage.values()].reduce((sum, value) => sum + value, 0) || undefined

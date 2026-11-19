@@ -49,14 +49,14 @@ function parseSkillListing(content, seenSkills, skillOut) {
   }
 }
 
-export function userText(text) {
+export function userText(text, references) {
   const command = String(text || '').match(/<command-name>([^<]*)<\/command-name>/)
   if (command) {
     const args = String(text || '').match(/<command-args>([\s\S]*?)<\/command-args>/)?.[1].trim()
     return [command[1].trim(), args].filter(Boolean).join(' ')
   }
   if (/^\s*\[Request interrupted by user[^\]]*\]\s*$/.test(text)) return '（中途打断）'
-  return mentions(stripInjected(String(text || '').replace(/<command-message>[\s\S]*?<\/command-message>/g, '')))
+  return mentions(stripInjected(String(text || '').replace(/<command-message>[\s\S]*?<\/command-message>/g, '')), references)
 }
 
 const field = (text, name) => String(text || '').match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`))?.[1].trim()
@@ -296,7 +296,10 @@ export function readClaudeCode(records, { includeMemory = false } = {}) {
       const back = handBack(text)
       if (back) reported(back, time)
       else if (/^\s*<task-notification>/.test(text)) notified(text, time)
-      else transcript.user(userText(text), time, { images: typeof prompt === 'string' ? [] : imagesOf(prompt) })
+      else {
+        const references = []
+        transcript.user(userText(text, references), time, { references, cwd: record.cwd, images: typeof prompt === 'string' ? [] : imagesOf(prompt) })
+      }
       continue
     }
     if (!['user', 'assistant'].includes(record.type) || record.isApiErrorMessage) continue
@@ -342,7 +345,7 @@ export function readClaudeCode(records, { includeMemory = false } = {}) {
         if (ctxTokens > 0) lastContextTokens = ctxTokens
       }
       for (const block of blocks) {
-        if (block.type === 'text' && block.text !== '(no content)') transcript.assistant(block.text, time, { key: message.id })
+        if (block.type === 'text' && block.text !== '(no content)') transcript.assistant(block.text, time, { key: message.id, cwd: record.cwd })
         else if (block.type === 'thinking') transcript.reasoning(block.thinking, time)
         else if (block.type === 'tool_use') transcript.tool(block.id, describeTool(block.name, block.input), time)
       }
@@ -358,14 +361,15 @@ export function readClaudeCode(records, { includeMemory = false } = {}) {
 
     const said = []
     const pictures = []
+    const references = []
     for (const block of blocks) {
       if (block.type === 'text' && /^\s*<task-notification>/.test(block.text)) {
         notified(block.text, time)
       } else if (block.type === 'tool_result') {
         const output = stripInjected(textOf(block.content))
-        transcript.result(block.tool_use_id, /^Async agent launched successfully/.test(output) ? undefined : output, time, imagesOf(block.content))
+        transcript.result(block.tool_use_id, /^Async agent launched successfully/.test(output) ? undefined : output, time, imagesOf(block.content), record.cwd)
       } else if (block.type === 'text') {
-        const cleaned = userText(block.text)
+        const cleaned = userText(block.text, references)
         if (/^The context window filled up while you were working, so the conversation was compacted\./i.test(cleaned)) continue
         said.push(cleaned)
       } else if (block.type === 'image') {
@@ -374,7 +378,7 @@ export function readClaudeCode(records, { includeMemory = false } = {}) {
     }
     const joinedSaid = said.filter(Boolean).join('\n\n')
     if (joinedSaid && joinedSaid !== '/compact') pendingCompact = null
-    transcript.user(joinedSaid, time, { images: pictures })
+    transcript.user(joinedSaid, time, { images: pictures, references, cwd: record.cwd })
   }
   const tokens = [...usage.values()].reduce((sum, value) => sum + value, 0) || undefined
   const initialContext = (initSys.length || initSchema.length || initMem.length || initSkill.length)
