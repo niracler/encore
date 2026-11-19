@@ -58,6 +58,9 @@ function isTableSeparator(line) {
   return cells.length > 0 && cells.every(c => /^:?-{2,}:?$/.test(c))
 }
 
+const openingFence = /^ {0,3}(`{3,})([^`]*)$/
+const closingFence = /^ {0,3}(`{3,})[ \t]*$/
+
 export function renderMarkdown(source) {
   const raw = String(source ?? '').replace(/\r\n/g, '\n').trim()
   if (!raw) return ''
@@ -74,16 +77,17 @@ export function renderMarkdown(source) {
       continue
     }
 
-    const fence = line.match(/^```([\w-]*)\s*$/)
+    const fence = line.match(openingFence)
     if (fence) {
-      const lang = fence[1]
+      const lang = fence[2].trim().split(/\s+/, 1)[0]
       const codeLines = []
       i++
-      while (i < lines.length && !/^```\s*$/.test(lines[i])) {
-        codeLines.push(lines[i])
-        i++
+      while (i < lines.length) {
+        const codeLine = lines[i++]
+        const close = codeLine.match(closingFence)
+        if (close && close[1].length >= fence[1].length) break
+        codeLines.push(codeLine)
       }
-      if (i < lines.length) i++
       const cls = lang ? ` class="language-${escapeHtml(lang)}"` : ''
       out.push(`<pre><code${cls}>${escapeHtml(codeLines.join('\n'))}</code></pre>`)
       continue
@@ -149,11 +153,12 @@ export function renderMarkdown(source) {
       continue
     }
 
-    const paraLines = []
+    const paraLines = [renderInline(line)]
+    i++
     while (
       i < lines.length &&
       lines[i].trim() !== '' &&
-      !/^```/.test(lines[i]) &&
+      !openingFence.test(lines[i]) &&
       !/^(#{1,6})\s+/.test(lines[i]) &&
       !/^(?:-{3,}|\*{3,}|_{3,})\s*$/.test(lines[i].trim()) &&
       !/^\s*>\s?/.test(lines[i]) &&
@@ -164,9 +169,7 @@ export function renderMarkdown(source) {
       paraLines.push(renderInline(lines[i]))
       i++
     }
-    if (paraLines.length) {
-      out.push(`<p>${paraLines.join('<br>')}</p>`)
-    }
+    out.push(`<p>${paraLines.join('<br>')}</p>`)
   }
 
   return out.join('\n')

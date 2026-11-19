@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { runInNewContext } from 'node:vm'
 import sharp from 'sharp'
 import {
   buildReplay,
@@ -59,6 +60,28 @@ test('timeline and renderPlayerWidget support both zh and en bilingual modes', (
   assert.match(htmlEn, /Active Context/)
   assert.match(htmlEn, /Context Compaction #1/)
   assert.match(htmlEn, /▶ Play/)
+})
+
+test('replies with nested code fences render without blocking playback', () => {
+  const text = [
+    'Example:',
+    '````markdown',
+    '```diff',
+    '+ <tag>',
+    '```',
+    '`````',
+    '```c++ example',
+    'int n;',
+    '```',
+    '```inline`text',
+    'Still here.',
+  ].join('\n')
+  const session = { ...sampleSession, items: [{ type: 'assistant', text, time: sampleSession.started }] }
+  // Interrupt a stalled synchronous parser so a regression fails instead of hanging the suite.
+  const html = runInNewContext('renderPlayerWidget(session)', { renderPlayerWidget, session }, { timeout: 2000 })
+  assert.ok(html.includes('<pre><code class="language-markdown">```diff\n+ &lt;tag&gt;\n```</code></pre>'))
+  assert.ok(html.includes('<pre><code class="language-c++">int n;</code></pre>'))
+  assert.ok(html.includes('Still here.</p>'))
 })
 
 test('handoffs belong to their exact reply or tool step and legacy files remain at the end', () => {
