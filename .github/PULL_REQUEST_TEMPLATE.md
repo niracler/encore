@@ -1,9 +1,20 @@
 ## Summary
 
-- Describe the user-visible change or fix.
+<!-- Brief summary plus at least one fenced code block (diff, text, mermaid) or Markdown table. -->
 
-## Verification
+<diagram, diff-sketch, or tree>
 
-- [ ] `pnpm test` passes (including `player/encore-player.js` bundle sync)
-- [ ] `pnpm run build:site` succeeds (if showcase or player UI changed)
-- [ ] Updated `schema/session.schema.json` and `src/index.d.ts` (if `session.json` fields or exports changed)
+## Evidence
+
+- **Before:** <screenshot/output/failing test run>
+- **After:** <screenshot/output/passing test run>
+
+## Merge Danger
+
+**Door:** <one-way or two-way>
+
+<!-- Optional: explain rollback cost. -->
+
+**Blast Radius:** <one-word description>
+
+<!-- Optional: potential ramifications of merge. -->
