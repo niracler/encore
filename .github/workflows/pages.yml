@@ -21,6 +21,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Check Pages publishing source and custom domain
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          domain=$(cat site/CNAME)
+          if ! gh api "repos/$GITHUB_REPOSITORY/pages" | jq -e --arg domain "$domain" \
+            '.build_type == "workflow" and .cname == $domain' > /dev/null; then
+            echo "::error::Check $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/settings/pages: select GitHub Actions and set the custom domain to $domain."
+            exit 1
+          fi
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
