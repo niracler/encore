@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="./docs/hero-zh.svg" alt="Encore：AI Agent 会话返场剧场" width="100%">
+  <img src="./docs/hero-zh.svg" alt="Encore · 回看一次 AI Agent 会话，看它怎么完成任务，交付了什么。" width="100%">
 </p>
 
 <p align="center">
-  <a href="https://encore.niracler.com/?lang=zh"><strong>在线演示（encore.niracler.com）↗</strong></a> ·
-  <a href="https://www.npmjs.com/package/@niracler/encore"><strong>npm ↗</strong></a> ·
+  <a href="https://encore.niracler.com/?lang=zh"><strong>在线演示（encore.niracler.com）</strong></a> ·
+  <a href="https://www.npmjs.com/package/@niracler/encore"><strong>npm</strong></a> ·
   <a href="./README.md">English</a> ·
   <a href="./README.zh-CN.md"><strong>简体中文</strong></a>
 </p>
@@ -16,51 +16,21 @@
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563eb?style=flat-square" alt="MIT 协议"></a>
 </p>
 
-**Encore** 是面向 AI Agent 会话的 [`asciinema`](https://asciinema.org)。Encore 在本地将 **Codex**、**Claude Code**、**Claude.ai** 和 **WorkBuddy** 的原始日志转换为可独立托管的交互网页。打开回放后，读者可以按时间轴逐步查看对话、工具调用、子 Agent 协作与过程截图，并在右侧同步观察上下文窗口的增长与压缩。
+**Encore** 是面向 AI Agent 会话的 [`asciinema`](https://asciinema.org)。它在本地将 **Codex**、**Claude Code**、**Claude.ai** 或 **WorkBuddy** 的原始日志转换为可独立托管的网页回放。打开回放后，读者可以按步骤查看对话轮次、工具调用、子 Agent 协作、画面帧与交付物，并在右侧同步查看上下文快照的增长与压缩。
 
-![Encore 界面预览：左侧为会话时间轴，右侧为实时上下文检查面板](./docs/preview-zh.webp)
-
----
-
-## 在线演示
-
-[在线展示站](https://encore.niracler.com/?lang=zh)首页收录 4 段回放：前两段记录《AI 七十年，长成一棵树》从首版到定稿的视频制作过程（默认打开首版），后两段对比 Codex 与 WorkBuddy 完成同一项海外照明采购方调研的过程。页面、播放器和案例导读支持中英文切换，对话内容保留原文。
-
-| 案例 | Agent | 看点 |
-| :--- | :--- | :--- |
-| [《AI 七十年》从构思到首版](https://encore.niracler.com/?lang=zh) | **Claude.ai** | 派发 7 个子 Agent 核对史实、准备讲稿，完成 4 分 10 秒的首版视频 |
-| [《AI 七十年》从反馈到定稿](https://encore.niracler.com/?demo=ai-tree-1015&lang=zh) | **Claude.ai** | 根据反馈补充历史照片并调整术语讲解，交付横屏与竖屏成片 |
-| [海外照明采购方调研](https://encore.niracler.com/?demo=lesson-00-buyers-codex&lang=zh) | **Codex** | 派发 3 个子 Agent 分头调研德国、英国和澳大利亚市场，整理出 26 家潜在客户 |
-| [海外照明采购方调研](https://encore.niracler.com/?demo=lesson-00-buyers-workbuddy&lang=zh) | **WorkBuddy** | 重新分派 3 个因额度用尽而中断的调研任务，整理出 32 家潜在客户 |
-
-其他回放可通过直链打开：
-
-| 案例 | Agent | 看点 |
-| :--- | :--- | :--- |
-| [大改课程海报：三套视觉提案](https://encore.niracler.com/?demo=poster-redesign&lang=zh) | **Codex** | 记录 7 张 `.webp` 过程图，并在中途触发一次上下文自动压缩 |
-| [把新版七阶段图接入课件与站点](https://encore.niracler.com/?demo=work-stages-site&lang=zh) | **Claude Code** | 派发 4 个子 Agent 协作接入课件与站点，含 5 张过程截图及页面脚本故障修复 |
-| [嫌太难看，重做「七阶段图」](https://encore.niracler.com/?demo=work-stages-design&lang=zh) | **Claude.ai** | 导入网页导出包（`conversations.json`），探索 6 套版式方向并迭代 9 稿 |
-| [横纵分析开源工具 x-cmd](https://encore.niracler.com/?demo=xcmd-research&lang=zh) | **WorkBuddy** | 并行派发 4 个子 Agent 检索公开资料，整理出结构化研究报告 |
+![Encore 播放器预览：左侧为会话步骤时间轴，右侧为实时上下文快照面板](./docs/preview-zh.webp)
 
 ---
 
 ## 快速开始
 
-需要 **Node.js >= 20.10**，无需全局安装：
+需要 **Node.js >= 20.10**，无需全局安装。
 
 ```bash
-# 交互选择：自动扫描 ~/.codex/sessions、~/.claude/projects 与 ~/.workbuddy/projects
-# 按 ↑ / ↓ 选择会话，← / → 翻页
 npx @niracler/encore@latest
-
-# 指定单个日志导出：自动识别 .jsonl、.jsonl.zst 与 Claude.ai 的 conversations.json
-npx @niracler/encore@latest /path/to/rollout.jsonl -o ./replays/my-session
-
-# 启动本地预览服务（默认 http://localhost:4180）
-npx @niracler/encore@latest play ./replays/my-session
 ```
 
-未指定 `-o` 时，Encore 默认在当前目录生成 `./replays/<会话短名>/`，内含 `session.json`、去重后的 `*.webp` 图片、`index.html`、`encore-player.js` 和 `encore-player.css`。
+选择一段最近的会话，浏览器就会打开回放。
 
 ---
 
@@ -70,25 +40,40 @@ npx @niracler/encore@latest play ./replays/my-session
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./docs/architecture-zh-dark.webp">
     <source media="(prefers-color-scheme: light)" srcset="./docs/architecture-zh-light.webp">
-    <img src="./docs/architecture-zh-light.webp" alt="Encore 处理流水线：从原始 Agent 日志到本地可托管的交互回放" width="100%">
+    <img src="./docs/architecture-zh-light.webp" alt="Encore 处理架构：从原始 Agent 日志与资产根目录内的本地文件，到可独立托管的回放目录与零依赖播放器" width="100%">
   </picture>
 </p>
 
-- **全本地离线运行**：日志解析、WebP 图片转码与基础脱敏全部在本地 Node.js 环境中完成，不上传任何数据。
-- **数据与播放器分离**：`session.json` 与提取出的 `.webp` 图片独立于零依赖播放器之外，修改文案或删减截图后刷新页面即可生效，无需重新构建。
-- **媒体边界明确**：CLI 仅自动提取日志内嵌的 Base64 图片与 `.md` 文稿；工作区磁盘上额外生成的 `.mp3`、`.mp4`、海报和 PDF 等外部文件不会自动采集，需要发布时手动复制到回放目录并在 `session.json` 中引用。
+- **全本地离线运行**：日志适配、WebP 画面帧转码与自动脱敏都在本地 Node.js 环境中完成，不上传任何数据。
+- **会话数据与播放器分离**：`session.json`、提取出的 `.webp` 画面帧和收录文件与零依赖播放器同目录存放，整理修改后刷新页面即可生效。
+- **明确的文件收集边界（`main` 未发布）**：在 `main` 分支（[未发布更新](./CHANGELOG.md#unreleased)）中，Encore 会收集资产根目录内日志明确引用的附件与交付物，生成 PDF 与表格的页内预览，并在原消息下标注「已核对版本」「导出时的副本」或「原文件缺失」。上方快速开始命令运行的是 npm 已发布的 `0.2.0` 版本，仅提取内嵌媒体与内联 `.md` 文稿。
 
 ---
 
 ## 发布前整理（可选）
 
-原始导出往往保留大量中间截图，默认以首条提问作为标题，且正则表达式无法识别项目内部代号等隐性敏感信息。将 [`skills/encore/SKILL.md`](./skills/encore/SKILL.md) 复制到 `.agents/skills/encore`（或 `~/.codex/skills/encore`、`~/.claude/skills/encore`）后，可以让 Agent 协助筛选并命名截图、撰写标题与开场说明、清理隐性敏感信息，并按需裁剪无关对话：
+如果只是个人复盘或内部留档，CLI 导出的回放已经可以直接看，不需要安装技能。
+
+如果要把回放公开发布到博客、课程或展示页，原始导出通常还需要一轮整理：筛选关键画面帧、撰写清晰的标题与开场说明、裁剪无关轮次，并去掉正则识别不出的内部名称与业务细节。这些步骤需要读懂上下文和查看图片，因此 Encore 配套提供了给 Agent 使用的 `encore` 技能：
+
+| 阶段 | 执行方式 | 完成的工作 |
+| --- | --- | --- |
+| **导出** | Encore CLI（确定性处理） | 转换原始日志、提取 `.webp` 画面帧，对常见密钥、本机路径、邮箱与内网 IP 自动脱敏，并生成独立回放 |
+| **整理** | Agent + `encore` 技能（语义整理） | 逐张查看并标注里程碑画面帧、撰写标题与开场说明、脱敏内部代号、人名与业务数据、裁剪无关轮次，并重建回放 |
+
+全局安装该技能（或手动复制 [`skills/encore/SKILL.md`](./skills/encore/SKILL.md)）：
+
+```bash
+npx skills add niracler/encore -g
+```
+
+之后在任意工作区直接告诉 Agent：
 
 ```text
 用 encore 技能把我刚才那段对话导出并整理一下。
 ```
 
-手动编辑 `session.json` 后，对回放目录运行 `npx @niracler/encore@latest ./replays/my-session`，即可同步页面 `<title>`、清理已删除截图的引用并重新检查敏感信息。对已有回放目录重新运行不会覆盖手工修改或手动添加的媒体文件。
+**公开分享前请复核**：自动脱敏只改写 `session.json`，不会修改 `attachments/` 中复制进来的 PDF、工作簿、图片或视频原件。发布前请检查 `session.json`、保留的 `.webp` 画面帧，以及所有打包的附件和交付物。
 
 ---
 
@@ -109,14 +94,17 @@ npx @niracler/encore@latest play ./replays/my-session
 
 ### CLI 参数
 
+会话选择器扫描 `~/.codex/sessions`、`~/.claude/projects` 和 `~/.workbuddy/projects`。也可以直接传入 `.jsonl`、`.jsonl.zst` 日志或 Claude.ai 导出的 `conversations.json`。
+
 ```text
 用法：
   encore                              扫描本机最近的 Codex、Claude Code 与 WorkBuddy 会话，上下键选择导出
-  encore <log.jsonl | dir> [options]  从原始日志一步生成回放目录，或对已修改的目录重新同步
+  encore <log.jsonl | dir> [options]  从原始日志生成回放目录，或重建已有回放目录
   encore play <dir> [--port 4180]     启动本地预览服务
 
 常用参数：
   -o, --out <dir>          输出目录（默认：./replays/<会话短名>）
+      --asset-root <dir>   指定允许收集附件与交付物的资产根目录，可重复使用（main 未发布功能）
   -l, --lang <zh|en|auto>  界面语言（默认：auto，网页右上角也可一键切换）
       --title <text>       自定义回放标题
       --desc <text>        自定义开场导读说明
@@ -166,22 +154,22 @@ JSON Schema 规范：[`schema/session.schema.json`](./schema/session.schema.json
 <summary><strong>常见问题（FAQ）</strong></summary>
 
 **日志会上传吗？隐私和密钥怎么处理？**
-不会。所有处理都在本地完成。导出时，Encore 会自动脱敏常见 API 密钥、私钥、JWT、数据库连接串、邮箱、内网 IP 与本机用户目录路径（替换为 `~`）。跨会话 `MEMORY_SUMMARY` 与用户级 `CLAUDE.md` 默认省略正文，疑似内网域名和 URL 凭据参数会输出提示。由于正则表达式无法识别项目代号、同事姓名、业务数据以及截图画面中的敏感信息，公开发布前仍需人工复核 `session.json` 与保留的 `.webp` 图片。
+不会。所有处理都在本地完成。导出时，自动脱敏会隐藏常见 API 密钥、私钥、JWT、数据库连接串、邮箱、内网 IP 与本机用户目录路径（替换为 `~`）；跨会话 `MEMORY_SUMMARY` 与用户级 `CLAUDE.md` 默认省略正文，泄露检查会对疑似内网域名与 URL 凭据参数发出非阻塞提示。项目代号、业务数据，以及画面帧、附件和交付物原件中的敏感内容仍需人工复核。
 
-**导出后删除原始日志或原工作区文件，会影响回放吗？**
-删除原始日志不会影响回放，但删除未复制的外部媒体文件会导致对应资源无法加载。原始日志中的内容（对话、上下文、内联 `.md` 文稿与提取出的 `.webp` 图片）会全部写入 `./replays/<会话短名>/`，因此导出后可以安全删除原始 `.jsonl` 文件。仅保存在工作区磁盘上的外部成品（如 `.mp3` 旁白、`.mp4` 视频、海报或 PDF）不会被自动复制；删除原文件前，需先将这些文件复制到回放目录并在 `session.json` 中使用相对路径引用。
+**导出后删除原始日志或工作区文件，会影响回放吗？**
+已经打包进回放目录的内容（`session.json`、`.webp` 画面帧、`attachments/` 与播放器文件）不依赖原始日志和原工作区。保持整个回放目录完整即可；指向外部网站的链接仍依赖原地址。
 
 **为什么双击 `index.html`（`file://` 协议）无法播放？**
 播放器通过 `fetch('./session.json')` 加载数据，浏览器安全策略会拦截 `file://` 协议下的本地请求。本地预览请运行 `npx @niracler/encore@latest play ./replays/<会话短名>`；部署到静态托管服务后即可直接访问。
 
-**为什么有些截图、音频或视频没有自动出现？**
-Encore 仅能提取以 Base64 形式进入过模型对话或工具返回内容的图片。由脚本直接写入磁盘且未回传给模型的媒体文件，以及 Claude.ai 网页导出的 `conversations.json`（官方导出包不包含上传图片与 Artifact 渲染图），在日志中均不包含对应二进制数据。播放器原生支持步骤音频（`item.audio`）、`.mp4` 视频与交付物卡片，可在整理阶段将文件复制到回放目录并在 `session.json` 中引用。
+**为什么有些附件或交付物显示缺失，或标为导出时的副本？**
+在 `main` 分支（未发布）中，Encore 会从允许的资产根目录（默认为当前工作目录与原始会话工作区，可用 `--asset-root` 覆盖）收集消息和交付工具明确引用的本地文件。由脚本直接写入磁盘且未被显式引用的文件不会自动收集；若引用的原文件已不存在，原消息下仍会保留文件名并提示缺失。找到文件后，只有 SHA-256 与会话记录的校验值一致时才会标明版本已核对，否则标明为导出时的副本。
 
 **右侧上下文面板的 Token 数值是实际账单数字吗？**
-不是。上下文面板用于观察上下文构成和增长趋势，不替代服务商账单。原始日志包含真实 Token 统计（含压缩前后的 `preTokens` 与 `postTokens`）时，面板直接显示记录值；缺少步级统计或 7 类分桶明细时，按内容长度估算占比。
+不是。上下文快照用于观察上下文结构与增长趋势，不替代服务商账单。原始日志包含真实 Token 统计（含压缩前后的 `preTokens` 与 `postTokens`）时，面板直接显示记录值；缺少步级统计或 7 个上下文分类明细时，按内容长度估算占比。
 
-**原始回放太长或截图太多，如何精简？**
-导出时可使用 `--from` 与 `--to` 按 ISO 时间范围截取片段。也可以直接编辑 `session.json` 中的 `frames[]`、`items[]`、`title` 与 `description`，再对目录运行 `npx @niracler/encore@latest ./replays/<会话短名>`，同步页面 `<title>` 并清理无效引用。对已有回放目录重新同步不会覆盖手工修改与手动添加的媒体文件；若重新从原始 `.jsonl` 导出到同一目录，则会重新生成 `.webp` 图片。
+**原始回放太长或画面帧太多，如何精简？**
+导出时可用 `--from` 与 `--to` 按 ISO 时间范围切片。也可以直接整理 `session.json` 中的 `frames[]`、`items[]`、`title` 与 `description`，再运行 `npx @niracler/encore@latest ./replays/<会话短名>` 重建播放器文件、同步页面 `<title>`、清理无效画面帧引用并重新运行泄露检查。重建不会覆盖手工整理与新增媒体；若从原始日志重新导出到同一目录，则会重新提取 `.webp` 画面帧。
 
 </details>
 
@@ -189,6 +177,6 @@ Encore 仅能提取以 Base64 形式进入过模型对话或工具返回内容�
 
 ## 参与贡献与开源协议
 
-架构说明与开发命令见 [`AGENTS.md`](./AGENTS.md)。提交改动前运行 `pnpm test` 验证解析器、脱敏规则与播放器产物一致性；如需支持其他 AI Agent 日志格式，欢迎提交 Issue。
+架构说明与开发命令见 [`AGENTS.md`](./AGENTS.md)，统一领域术语见 [`GLOSSARY.md`](./GLOSSARY.md)。提交改动前运行 `pnpm test` 验证适配器、脱敏规则与播放器构建产物一致性；如需支持其他 AI Agent 日志格式，欢迎提交 Issue。
 
 [MIT](./LICENSE)

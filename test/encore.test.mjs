@@ -48,7 +48,7 @@ test('timeline and renderPlayerWidget support both zh and en bilingual modes', (
   assert.match(lineZh.steps[0].contextSnapshot.categories[0].name, /系统提示词/)
 
   const htmlZh = renderPlayerWidget(sampleSession, lineZh, { lang: 'zh' })
-  assert.match(htmlZh, /当前上下文/)
+  assert.match(htmlZh, /上下文快照/)
   assert.match(htmlZh, /上下文压缩 #1/)
   assert.match(htmlZh, /▶ 播放/)
   assert.match(htmlZh, /<strong>1\.1 页<\/strong>/)
@@ -56,7 +56,7 @@ test('timeline and renderPlayerWidget support both zh and en bilingual modes', (
   const lineEn = timeline(sampleSession, { lang: 'en' })
   assert.equal(lineEn.steps[0].contextSnapshot.categories[0].name, 'System Prompt')
   const htmlEn = renderPlayerWidget(sampleSession, lineEn, { lang: 'en' })
-  assert.match(htmlEn, /Active Context/)
+  assert.match(htmlEn, /Context Snapshot/)
   assert.match(htmlEn, /Context Compaction #1/)
   assert.match(htmlEn, /▶ Play/)
 })
