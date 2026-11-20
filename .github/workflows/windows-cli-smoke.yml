@@ -46,9 +46,9 @@ jobs:
         shell: pwsh
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
-          Copy-Item test/fixtures/windows-smoke.jsonl "$env:SMOKE_DIR\输入 日志.jsonl"
+          node test/fixtures/prepare-windows-replay.mjs "$env:SMOKE_DIR"
           Set-Location $env:SMOKE_DIR
           .\node_modules\.bin\encore.cmd '.\输入 日志.jsonl' -o '.\输出 回放' --lang zh --no-serve
 
-      - name: Play the exported message and screenshot in Chromium
+      - name: Play the long replay and read its attachments in Chromium
         run: node --test test/windows-cli-smoke.mjs
