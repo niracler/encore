@@ -69,7 +69,9 @@ export function renderIndexHtml({ title = 'Agent Session Replay', lang = 'auto',
   <link rel="stylesheet" href="./encore-player.css">
 </head>
 <body class="encore-page">
-  <div data-encore-player src="${escapeHtml(sessionSrc)}"${dataLangAttr}></div>
+  <div data-encore-player src="${escapeHtml(sessionSrc)}"${dataLangAttr}>
+    <div class="encore-loading" role="status">${htmlLang === 'en' ? 'Loading replay…' : '正在加载回放…'}</div>
+  </div>
   <script src="./encore-player.js" defer></script>
 </body>
 </html>
