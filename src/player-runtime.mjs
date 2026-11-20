@@ -1,7 +1,7 @@
 import { createTranslator, resolveLang } from './i18n.mjs'
 import { attachAttachmentReaders } from './attachment-reader.mjs'
 import { escapeHtml } from './markdown.mjs'
-import { buildPlayerData, elapsedClock, renderPlayerWidget, wallClock } from './render.mjs'
+import { buildPlayerData, elapsedClock, renderPlayerWidget, renderTimelineBar, wallClock } from './render.mjs'
 import { timeline } from './timeline.mjs'
 
 const shorten = (text, length) => (text.length > length ? `${text.slice(0, length)}…` : text)
@@ -113,11 +113,10 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
   const stageTrigger = containerEl.querySelector('[data-session-stage-trigger]')
   const composerText = containerEl.querySelector('[data-session-composer-text]')
   const sendBtn = containerEl.querySelector('[data-session-send]')
-  const progressBar = containerEl.querySelector('[data-session-progress]')
   const timelineBar = containerEl.querySelector('[data-session-timeline]')
   const tlTrack = timelineBar?.querySelector('[data-tl-track]')
   const tlPop = timelineBar?.querySelector('[data-tl-pop]')
-  const tlSegs = timelineBar ? [...timelineBar.querySelectorAll('[data-tl-step]')] : []
+  const tlRange = tlTrack?.querySelector('[data-tl-range]')
   const tlPins = timelineBar ? [...timelineBar.querySelectorAll('[data-tl-jump]')] : []
   const lightbox = containerEl.querySelector('[data-session-lightbox]')
   const lightboxImg = lightbox?.querySelector('[data-lightbox-img]')
@@ -143,8 +142,6 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
   let curTime = 0
   let playHead = initialStep
   let prevRenderedHead = initialStep
-  let selectedIdx = initialStep
-  let userClickedInspect = false
   let isInitialMount = true
   let playing = false
   let stepBusy = false
@@ -266,13 +263,6 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
     stepBusy = false
   }
 
-  function updateProgressHairline(idx = playHead) {
-    if (!progressBar) return
-    const ratio = steps.length > 0 && idx >= 0 ? Math.max(0, Math.min(1, (idx + 0.5) / steps.length)) : 0
-    progressBar.style.opacity = idx >= 0 || playing ? '1' : '0'
-    progressBar.style.transform = `scaleX(${ratio.toFixed(4)})`
-  }
-
   function rawPromptTextOf(stepIdx) {
     const step = steps[stepIdx]
     if (!step || step.kind !== 'prompt') return ''
@@ -352,10 +342,6 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
     return idx < 0 ? buildPrePromptStep() : model.selectStep(idx)
   }
 
-  function currentSelectedState() {
-    return stateForIndex(selectedIdx)
-  }
-
   if (play) play.hidden = false
   attachAttachmentReaders(containerEl, t, () => { if (playing) setPlaying(false) })
   if (log) log.classList.add('is-staged')
@@ -401,10 +387,9 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
 
   function applyEchoHighlight() {
     if (!asidePane) return
-    const activeKey = hoverCat || (userClickedInspect ? openCat : null)
-    stackedBar?.classList.toggle('lc-stacked-dim', Boolean(activeKey))
+    stackedBar?.classList.toggle('lc-stacked-dim', Boolean(hoverCat))
     asidePane.querySelectorAll('[data-cat-key]').forEach(el => {
-      const match = activeKey && el.dataset.catKey === activeKey
+      const match = hoverCat && el.dataset.catKey === hoverCat
       el.classList.toggle('lc-stacked-seg-on', Boolean(match && el.classList.contains('lc-stacked-seg')))
       el.classList.toggle('lc-chip-on', Boolean(match && el.classList.contains('lc-chip')))
     })
@@ -417,6 +402,7 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
     entry.addEventListener('click', event => {
       const lbBtn = event.target.closest('[data-lightbox-src]')
       if (lbBtn && lightbox && lightboxImg) {
+        event.preventDefault()
         event.stopPropagation()
         if (playing) setPlaying(false)
         lightbox.classList.remove('is-doc')
@@ -454,18 +440,7 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
       }
       if (event.target.closest('a, audio, video, summary, button')) return
       if (stepIndex > playHead) return
-      if (playing) setPlaying(false)
-      const step = steps[stepIndex]
-      selectedIdx = stepIndex
-      userClickedInspect = true
-      openCat = step?.primaryCat || null
-      follow = false
-      render()
-      if (openCat) {
-        requestAnimationFrame(() => {
-          asidePane?.querySelector(`[data-browser-cat="${openCat}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-        })
-      }
+      jumpToStep(stepIndex)
     })
     entry.addEventListener('mouseenter', () => {
       if (stepIndex > playHead) return
@@ -486,8 +461,6 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
     if (snapLabel) {
       if (stepState.index < 0) {
         snapLabel.textContent = t('snapInitial')
-      } else if (selectedIdx < playHead) {
-        snapLabel.textContent = t('snapInspect', { step: stepState.index + 1, total: steps.length })
       } else {
         snapLabel.textContent = t('snapCurrent', { step: stepState.index + 1, total: steps.length })
       }
@@ -617,45 +590,47 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
     tlPop.hidden = false
   }
 
-  function jumpViaTimeline(idx) {
-    const clamped = Math.max(0, Math.min(steps.length - 1, idx))
-    if (playing) setPlaying(false)
-    activate()
-    if (clamped > playHead) {
-      clearStepAnimations()
-      playHead = clamped
-      prevRenderedHead = clamped
-      animatedHead = clamped
-      selectedIdx = clamped
-      userClickedInspect = false
-      openCat = steps[clamped]?.primaryCat || null
-      const next = steps[playHead + 1]
-      const nextDraft = next?.kind === 'prompt' ? rawPromptTextOf(next.index) : ''
-      if (nextDraft) setComposerVisual('draft', nextDraft)
-      else setComposerVisual('idle')
-      follow = true
-      render()
-    } else {
-      selectedIdx = clamped
-      userClickedInspect = clamped < playHead
-      openCat = steps[clamped]?.primaryCat || null
-      follow = false
-      render()
-      const targetEntry = stepEntries.find(e => e.stepIndex === clamped)?.entry
-      if (targetEntry) camera.frameEntry(targetEntry, false)
+  function jumpToStep(idx) {
+    setPlaying(false)
+    // A seek shows the completed Step immediately, including a one-Step jump.
+    prevRenderedHead = idx
+    goToStage(idx)
+  }
+
+  // Reserve space for named Frames first, then fill the gaps with documents.
+  const labelOrder = [...tlPins].sort((a, b) => Number(b.hasAttribute('data-tl-frame')) - Number(a.hasAttribute('data-tl-frame')))
+  function fitTimelineLabels() {
+    const width = tlTrack.clientWidth
+    const occupied = []
+    for (const pin of labelOrder) {
+      const anchor = (Number(pin.dataset.tlJump) + 1) / steps.length * width
+      const left = Math.max(0, Math.min(width - pin.offsetWidth, anchor - pin.offsetWidth / 2))
+      const right = left + pin.offsetWidth
+      const fits = right <= width && occupied.every(span => right + 8 <= span.left || left >= span.right + 8)
+      pin.classList.toggle('is-visible', fits)
+      if (fits) {
+        pin.style.left = `${left}px`
+        occupied.push({ left, right })
+      }
     }
   }
 
-  tlTrack?.addEventListener('mouseover', event => {
-    const h = event.target.closest('[data-tl-hover]')
-    renderTimelineHover(h ? Number(h.dataset.tlHover) : null)
+  const labelObserver = tlPins.length ? new ResizeObserver(fitTimelineLabels) : null
+  if (labelObserver) labelObserver.observe(tlTrack)
+  tlRange?.addEventListener('input', () => jumpToStep(tlRange.valueAsNumber - 1))
+  tlRange?.addEventListener('pointerdown', () => { if (playing) setPlaying(false) })
+  tlTrack?.addEventListener('pointermove', event => {
+    const pin = event.target.closest('[data-tl-jump]')
+    if (pin) return renderTimelineHover(Number(pin.dataset.tlJump))
+    if (event.target !== tlRange || !steps.length) return renderTimelineHover(null)
+    const rect = tlRange.getBoundingClientRect()
+    const step = Math.round((event.clientX - rect.left) / rect.width * steps.length)
+    renderTimelineHover(Math.max(0, Math.min(steps.length - 1, step - 1)))
   })
-  tlTrack?.addEventListener('mouseleave', () => renderTimelineHover(null))
+  tlTrack?.addEventListener('pointerleave', () => renderTimelineHover(null))
   tlTrack?.addEventListener('click', event => {
-    const el = event.target.closest('[data-tl-jump], [data-tl-step]')
-    if (!el) return
-    const idx = Number(el.dataset.tlJump ?? el.dataset.tlStep)
-    if (Number.isFinite(idx)) jumpViaTimeline(idx)
+    const pin = event.target.closest('[data-tl-jump]')
+    if (pin) jumpToStep(Number(pin.dataset.tlJump))
   })
 
   asidePane?.addEventListener('click', event => {
@@ -685,7 +660,7 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
     if (chipOrSeg) {
       const catId = chipOrSeg.dataset.catKey
       openCat = openCat === catId ? null : catId
-      renderContextSidebar(currentSelectedState())
+      renderContextSidebar(stateForIndex(playHead))
       asidePane.querySelector(`[data-browser-cat="${catId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
       return
     }
@@ -693,7 +668,7 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
     if (catBtn && !catBtn.disabled) {
       const catId = catBtn.dataset.browserCatToggle
       openCat = openCat === catId ? null : catId
-      renderContextSidebar(currentSelectedState())
+      renderContextSidebar(stateForIndex(playHead))
       return
     }
     const itemBtn = event.target.closest('[data-browser-item-toggle]')
@@ -701,7 +676,7 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
       const itemId = itemBtn.dataset.browserItemToggle
       if (openItems.has(itemId)) openItems.delete(itemId)
       else openItems.add(itemId)
-      renderContextSidebar(currentSelectedState())
+      renderContextSidebar(stateForIndex(playHead))
     }
   })
 
@@ -930,7 +905,6 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
   }
 
   function runHeadChoreography(headState, headEntry, animateNewStep, steppedForwardOne) {
-    updateProgressHairline()
     if (!animateNewStep) return
     clearStepAnimations()
 
@@ -974,7 +948,7 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
     if (headState.kind === 'compact') {
       setComposerVisual('running')
       openCat = 'tool'
-      renderContextSidebar(currentSelectedState())
+      renderContextSidebar(stateForIndex(playHead))
       if (headEntry && !calm.matches && typeof headEntry.animate === 'function') {
         activeAnims.push(headEntry.animate(
           [
@@ -1003,7 +977,6 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
 
   function render() {
     const headState = stateForIndex(playHead)
-    const selectedState = currentSelectedState()
     curTime = headState.index < 0 ? 0 : headState.t
     const x = (playerData.end > 0 ? ((curTime / playerData.end) * width) : 0).toFixed(1)
     if (head) {
@@ -1024,45 +997,19 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
       play.setAttribute('aria-label', atEnd ? t('replayAria') : t('playAria'))
     }
 
-    renderContextSidebar(selectedState)
-    const shownIdx = userClickedInspect && selectedIdx >= 0 ? selectedIdx : playHead
-    const shownTime = shownIdx < 0 ? 0 : (steps[shownIdx]?.t || 0)
-    updateProgressHairline(shownIdx)
-    if (speedBadge) {
-      speedBadge.innerHTML = `<b>${Math.max(0, shownIdx + 1)}</b> / ${steps.length} · ${elapsedClock(shownTime)}`
+    renderContextSidebar(headState)
+    const stepNumber = playHead + 1
+    if (speedBadge) speedBadge.innerHTML = `<b>${stepNumber}</b> / ${steps.length} · ${elapsedClock(curTime)}`
+    if (tlRange) {
+      tlRange.value = String(stepNumber)
+      tlRange.setAttribute('aria-valuetext', t('tlStepMeta', { step: stepNumber, time: elapsedClock(curTime) }))
     }
-    tlSegs.forEach((seg, idx) => {
-      seg.classList.toggle('is-past', idx <= playHead && idx !== shownIdx)
-      seg.classList.toggle('is-active', idx === shownIdx && shownIdx >= 0)
-    })
-    tlPins.forEach(pin => {
-      const pIdx = Number(pin.dataset.tlJump)
-      pin.classList.toggle('is-on', pIdx === shownIdx && shownIdx >= 0)
-      pin.classList.toggle('is-reached', pIdx <= playHead)
-    })
+    for (const pin of tlPins) pin.classList.toggle('is-on', Number(pin.dataset.tlJump) === playHead)
 
     let latestVisibleEntry
     for (const item of stepEntries) {
       const future = item.stepIndex > playHead
       item.entry.classList.toggle('is-future', future)
-      const isInspectSelected = !future && userClickedInspect && item.stepIndex === selectedIdx
-      item.entry.classList.toggle('is-selected', isInspectSelected)
-
-      let tag = item.entry.querySelector('.session-inspect-tag')
-      if (isInspectSelected) {
-        if (!tag) {
-          tag = document.createElement('span')
-          tag.className = 'session-inspect-tag'
-          item.entry.prepend(tag)
-        }
-        const stTime = steps[selectedIdx]?.t || 0
-        tag.textContent = t.lang === 'en'
-          ? `Snapshot #${selectedIdx + 1} · ${elapsedClock(stTime)}`
-          : `快照 #${selectedIdx + 1} · ${elapsedClock(stTime)}`
-      } else if (tag) {
-        tag.remove()
-      }
-
       if (!future) latestVisibleEntry = item.entry
     }
     for (const aux of auxEntries) {
@@ -1096,8 +1043,6 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
     activate()
     if (shouldScroll) camera.resumeFollow()
     playHead = Math.max(-1, Math.min(steps.length - 1, nextIdx))
-    selectedIdx = playHead
-    userClickedInspect = false
     openCat = playHead < 0 ? null : (steps[playHead]?.primaryCat || null)
     follow = shouldScroll
     animatedHead = -2
@@ -1121,7 +1066,6 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
       const nextDraft = next?.kind === 'prompt' ? rawPromptTextOf(next.index) : ''
       if (nextDraft) setComposerVisual('draft', nextDraft)
       else setComposerVisual('idle')
-      updateProgressHairline()
       return
     }
     activate()
@@ -1130,17 +1074,9 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
       clearStepAnimations()
       playHead = -1
       prevRenderedHead = -1
-      selectedIdx = -1
-      userClickedInspect = false
       openCat = null
       follow = true
       animatedHead = -1
-      render()
-    }
-    if (selectedIdx < playHead) {
-      selectedIdx = playHead
-      userClickedInspect = false
-      openCat = steps[playHead]?.primaryCat || null
       render()
     }
     if (!stepBusy) {
@@ -1243,6 +1179,7 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
     destroy() {
       clearStepAnimations()
       camera.stop()
+      labelObserver?.disconnect()
       appEl.removeEventListener('keydown', onKeyDown)
     },
     goToStage,
@@ -1270,6 +1207,10 @@ export async function createEncorePlayer(targetEl, sourceOrSession, options = {}
     const appNode = el.querySelector('.session-app')
     const activeLang = resolveLang(options.lang || el.dataset.lang || appNode?.dataset.encoreLang || 'zh')
     const playerData = JSON.parse(preRenderedData.textContent)
+    const footer = el.querySelector('[data-session-timeline]')
+    if (footer && !footer.querySelector('[data-tl-range]')) {
+      footer.outerHTML = renderTimelineBar(playerData, createTranslator(activeLang))
+    }
     const activeController = attachPlayerController(el, playerData, {
       lang: activeLang,
       initialStep: options.initialStep ?? -1,

@@ -84,7 +84,7 @@ function thumbs(names, baseUrl = '') {
   if (!names?.length) return ''
   return `<span class="session-thumbs">${names.map(name => {
     const url = escape(resolveAsset(name, baseUrl))
-    return `<a href="${url}" target="_blank" rel="noopener noreferrer"><img src="${url}" alt="" width="96" loading="lazy"></a>`
+    return `<a href="${url}" data-lightbox-src="${url}" target="_blank" rel="noopener noreferrer"><img src="${url}" alt="" width="96" loading="lazy"></a>`
   }).join('')}</span>`
 }
 
@@ -155,76 +155,16 @@ function renderStepArtifacts(stepMeta, { skipImages = [], renderMd, t, baseUrl =
   return `<div class="session-frame-deck" data-frame-deck>${subagentHtml}${mediaRow}</div>`
 }
 
-function renderTimelineBar(line, t) {
+export function renderTimelineBar(line, t) {
   const steps = line.steps || []
   const total = steps.length
-  const rawPins = []
-  steps.forEach((s, idx) => {
-    const pct = total > 0 ? ((idx + 0.5) / total) * 100 : 0
-    if (s.compactInfo) {
-      const droppedK = ((s.compactInfo.droppedTokens || 0) / 1000).toFixed(0)
-      rawPins.push({
-        idx,
-        pct,
-        pinType: 'compress',
-        label: `${t('tlCompressPin', { seq: s.compactInfo.seq })}${droppedK > 0 ? ` (-${droppedK}k)` : ''}`,
-        turn: s.turn,
-      })
-    } else if (s.frames?.length) {
-      const aiFrame = s.frames.find(f => f.who === 'ai') || s.frames[0]
-      rawPins.push({ idx, pct, pinType: 'frame', label: aiFrame.label, turn: s.turn })
-    } else if (s.docs?.length) {
-      rawPins.push({ idx, pct, pinType: 'doc', label: s.docs[0].title, turn: s.turn })
-    } else if (s.kind === 'prompt') {
-      rawPins.push({ idx, pct, pinType: 'turn', label: `#${s.turn}`, turn: s.turn })
-    }
-  })
-
-  const occupiedPcts = []
-  const canShowText = pct => pct >= 5 && pct <= 95 && occupiedPcts.every(p => Math.abs(p - pct) >= 11)
-  for (const pin of rawPins) {
-    if (pin.pinType === 'compress' && canShowText(pin.pct)) {
-      pin.showText = true
-      occupiedPcts.push(pin.pct)
-    }
-  }
-  for (const pin of rawPins) {
-    if (pin.pinType === 'frame' && canShowText(pin.pct)) {
-      pin.showText = true
-      occupiedPcts.push(pin.pct)
-    }
-  }
-  for (const pin of rawPins) {
-    if (pin.pinType === 'doc' && canShowText(pin.pct)) {
-      pin.showText = true
-      occupiedPcts.push(pin.pct)
-    }
-  }
-  if (rawPins.length <= 14) {
-    for (const pin of rawPins) {
-      if (pin.pinType === 'turn' && canShowText(pin.pct)) {
-        pin.showText = true
-        occupiedPcts.push(pin.pct)
-      }
-    }
-  }
-
-  const pinsHtml = rawPins.map(pin => {
-    const text = pin.pinType === 'compress'
-      ? (pin.showText ? `🗜 ${escape(short(pin.label, 11))}` : '🗜')
-      : pin.pinType === 'frame'
-        ? (pin.showText ? `🖼 ${escape(short(pin.label, 8))}` : '🖼')
-        : pin.pinType === 'doc'
-          ? (pin.showText ? `📄 ${escape(short(pin.label, 8))}` : '📄')
-          : (pin.showText ? `💬 #${pin.turn}` : '')
-    const cls = `session-tl-pin is-${pin.pinType}${pin.showText ? ' has-label' : ' is-compact'}`
-    return `<button type="button" class="${cls}" style="left:${pin.pct.toFixed(2)}%" data-tl-jump="${pin.idx}" data-tl-hover="${pin.idx}" aria-label="${escape(t('tlJumpAria', { step: pin.idx + 1, label: pin.label }))}">${text}</button>`
+  const numberedFrame = /^(?:过程画面|参考画面|Agent Frame|Reference Frame) #\d+$/i
+  const pinsHtml = steps.map((step, idx) => {
+    const frame = step.frames?.find(frame => frame.label && !numberedFrame.test(frame.label))
+    const label = frame?.label || step.docs?.find(doc => doc.title)?.title
+    if (!label) return ''
+    return `<button type="button" class="session-tl-pin" data-tl-jump="${idx}"${frame ? ' data-tl-frame' : ''} aria-label="${escape(t('tlJumpAria', { step: idx + 1, label }))}">${escape(label)}</button>`
   }).join('')
-
-  const segsHtml = steps.map((s, idx) => (
-    `<div class="session-tl-seg${s.compactInfo ? ' has-compress' : s.frames?.length ? ' has-frame' : s.docs?.length ? ' has-doc' : ''}" data-tl-step="${idx}" data-tl-hover="${idx}"></div>`
-  )).join('')
-  const segGap = total > 360 ? '0px' : total > 160 ? '1px' : '2px'
 
   return `<footer class="session-timeline-bar" data-session-timeline aria-label="${escape(t('tlAria'))}">
     <div class="session-transport" role="group" aria-label="${escape(t('tlControlsAria'))}">
@@ -234,10 +174,9 @@ function renderTimelineBar(line, t) {
       <span class="session-speed-badge" data-session-speed><b>0</b> / ${total} · 00:00</span>
     </div>
     <div class="session-tl-track-wrap" data-tl-track>
-      <span class="session-composer-progress" data-session-progress aria-hidden="true"></span>
       <div class="session-tl-pop" data-tl-pop hidden></div>
-      <div class="session-tl-pins" data-tl-pins>${pinsHtml}</div>
-      <div class="session-tl-segs" style="--tl-gap:${segGap}" data-tl-segs>${segsHtml}</div>
+      ${pinsHtml ? `<div class="session-tl-pins" data-tl-pins>${pinsHtml}</div>` : ''}
+      <input class="session-tl-range" data-tl-range type="range" min="0" max="${total}" step="1" value="0" aria-label="${escape(t('tlAria'))}"${total ? '' : ' disabled'}>
     </div>
   </footer>`
 }

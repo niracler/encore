@@ -4,6 +4,13 @@ All notable changes to `@niracler/encore` will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- Clicking a message or moving the timeline pauses the Player at that Step. Playback resumes with the next Step. Image and document previews preserve the current position.
+- The timeline shows one position on a step-based track and fits named Frames and documents to the available width.
+
+### Added
+- The showcase includes the Japan travel map Replay with both original-sound films.
+
 ## [0.3.0] - 2026-11-20
 
 ### Changed

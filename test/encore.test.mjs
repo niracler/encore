@@ -478,7 +478,8 @@ test('timeline preserves reasoning-only turns, prevents negative token regressio
   const stepMatches = [...html.matchAll(/class="session-entry[^"]*"\s+data-step="(\d+)"/g)]
   assert.equal(stepMatches.length, 6, 'DOM data-step count must match line.steps.length')
   assert.match(html, /用户手绘草图/, 'user reference frame label should render as stage card')
-  assert.match(html, /<div class="session-tl-track-wrap" data-tl-track>\s*<span class="session-composer-progress"/, 'progress hairline should be inside track wrap for alignment')
+  assert.match(html, /data-tl-range type="range" min="0" max="6" step="1" value="0"/)
+  assert.match(html, /data-tl-jump="4"[^>]*>核心架构<\/button>/)
 })
 
 test('Codex patch previews keep each Markdown document and its modal separate', () => {
