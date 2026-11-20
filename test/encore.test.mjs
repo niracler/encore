@@ -141,26 +141,37 @@ test('export captures external handoffs, verifies only recorded digests, and pre
 })
 
 test('workbook previews preserve tab order and compare the requested Excel cell', async t => {
-  const { default: ExcelJS } = await import('exceljs')
+  const { default: xlsx } = await import('node-xlsx')
   const dir = mkdtempSync(join(tmpdir(), 'encore-workbook-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const updatedAt = new Date('2026-10-10T00:00:00.000Z')
   for (const [name, value] of [['before', '经销商'], ['after', '分销商']]) {
-    const book = new ExcelJS.Workbook()
-    const sheet = book.addWorksheet('名单')
-    book.addWorksheet('说明').getCell('A1').value = '使用说明'
-    sheet.getCell('A1').value = '公司'
-    sheet.getCell('A2').value = 'Example'
-    sheet.getCell('F2').value = value
-    await book.xlsx.writeFile(join(dir, name + '.xlsx'))
+    const bytes = xlsx.build([
+      {
+        name: '名单',
+        data: [
+          ['公司'],
+          ['Example', undefined, undefined, undefined, undefined, value],
+          [updatedAt],
+        ],
+      },
+      { name: '说明', data: [[], [undefined, '使用说明']] },
+    ])
+    writeFileSync(join(dir, name + '.xlsx'), bytes)
   }
+  writeFileSync(join(dir, 'corrupt.xlsx'), 'not a workbook')
   const file = { title: '名单', href: 'after.xlsx', revision: { href: 'before.xlsx', label: '公司类型', sheet: '名单', cell: 'F2' } }
-  writeFileSync(join(dir, 'session.json'), JSON.stringify({ ...sampleSession, deliverables: [file] }))
+  const corrupt = { title: '坏文件', href: 'corrupt.xlsx' }
+  writeFileSync(join(dir, 'session.json'), JSON.stringify({ ...sampleSession, deliverables: [file, corrupt] }))
   const { session } = await buildReplay(dir)
   const { preview } = session.deliverables[0]
   assert.deepEqual(preview.change, { before: '经销商', after: '分销商' })
   const sheets = JSON.parse(readFileSync(join(dir, preview.src), 'utf8'))
   assert.deepEqual(sheets.map(sheet => sheet.sheet), ['名单', '说明'])
   assert.equal(sheets[0].data[1][5], '分销商')
+  assert.equal(sheets[0].data[2][0], '2026-10-10T00:00:00.000Z')
+  assert.equal(sheets[1].data[1][1], '使用说明')
+  assert.equal(session.deliverables[1].preview, undefined)
 })
 
 test('createSessionPlaybackModel hydrates slim snapshots and steps', () => {
