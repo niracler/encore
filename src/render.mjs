@@ -158,13 +158,33 @@ function renderStepArtifacts(stepMeta, { skipImages = [], renderMd, t, baseUrl =
 export function renderTimelineBar(line, t) {
   const steps = line.steps || []
   const total = steps.length
-  const numberedFrame = /^(?:过程画面|参考画面|Agent Frame|Reference Frame) #\d+$/i
-  const pinsHtml = steps.map((step, idx) => {
-    const frame = step.frames?.find(frame => frame.label && !numberedFrame.test(frame.label))
-    const label = frame?.label || step.docs?.find(doc => doc.title)?.title
-    if (!label) return ''
-    return `<button type="button" class="session-tl-pin" data-tl-jump="${idx}"${frame ? ' data-tl-frame' : ''} aria-label="${escape(t('tlJumpAria', { step: idx + 1, label }))}">${escape(label)}</button>`
-  }).join('')
+  const pins = []
+  const cells = ['<span class="session-tl-cell"></span>']
+  for (const [idx, step] of steps.entries()) {
+    const frame = step.frames?.find(frame => frame.who === 'ai') || step.frames?.[0]
+    const doc = step.docs?.[0]
+    let kind = ''
+    let label = ''
+    let icon = ''
+    if (step.compactInfo) {
+      kind = 'compress'
+      label = t('tlCompressPin', { seq: step.compactInfo.seq })
+      icon = '🗜'
+    } else if (frame) {
+      kind = 'frame'
+      label = frame.label
+      icon = '🖼'
+    } else if (doc) {
+      kind = 'doc'
+      label = doc.title
+      icon = '📄'
+    } else if (step.kind === 'prompt') {
+      kind = 'turn'
+      label = t('tlPromptTitle', { turn: step.turn, summary: short(step.summary || '', 40) })
+    }
+    cells.push(`<span class="session-tl-cell ${kind}"></span>`)
+    if (label) pins.push(`<button type="button" class="session-tl-pin" data-kind="${kind}" data-tl-jump="${idx}" aria-label="${escape(t('tlJumpAria', { step: idx + 1, label }))}"><span aria-hidden="true">${icon}</span><span class="session-tl-caption">${escape(label)}</span></button>`)
+  }
 
   return `<footer class="session-timeline-bar" data-session-timeline aria-label="${escape(t('tlAria'))}">
     <div class="session-transport" role="group" aria-label="${escape(t('tlControlsAria'))}">
@@ -175,8 +195,11 @@ export function renderTimelineBar(line, t) {
     </div>
     <div class="session-tl-track-wrap" data-tl-track>
       <div class="session-tl-pop" data-tl-pop hidden></div>
-      ${pinsHtml ? `<div class="session-tl-pins" data-tl-pins>${pinsHtml}</div>` : ''}
-      <input class="session-tl-range" data-tl-range type="range" min="0" max="${total}" step="1" value="0" aria-label="${escape(t('tlAria'))}"${total ? '' : ' disabled'}>
+      ${pins.length ? `<div class="session-tl-pins">${pins.join('')}</div>` : ''}
+      <div class="session-tl-rail" style="--tl-count:${total + 1}">
+        <div class="session-tl-cells" aria-hidden="true">${cells.join('')}</div>
+        <input class="session-tl-range" data-tl-range type="range" min="0" max="${total}" step="1" value="0" aria-label="${escape(t('tlAria'))}"${total ? '' : ' disabled'}>
+      </div>
     </div>
   </footer>`
 }

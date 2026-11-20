@@ -8,7 +8,7 @@ const copy = {
     final: '70 Years of AI · Final cut', finalMeta: 'Revising after feedback',
     buyers: 'Overseas lighting buyers', codexBuyersMeta: 'Three markets · 26 leads',
     workbuddyBuyersMeta: 'Retrying tasks · 32 leads',
-    film: 'Watch the final film', loadError: 'Could not load this replay. Refresh the page to try again.',
+    back: '← All cases', film: 'Watch the film', loadError: 'Could not load this replay. Refresh the page to try again.',
   },
   zh: {
     japanTrip: '日本游记地图回放', japanMeta: '完整会话 · 两份有声成片',
@@ -19,16 +19,12 @@ const copy = {
     final: '《AI 七十年》定稿', finalMeta: '根据反馈剪出横竖两版',
     buyers: '调研海外照明采购方', codexBuyersMeta: '分头调查三地市场 · 26 家潜在客户',
     workbuddyBuyersMeta: '重新分派中断任务 · 32 家潜在客户',
-    film: '观看定稿成片', loadError: '回放加载失败，请刷新页面重试。',
+    back: '← 返回案例', film: '观看成片', loadError: '回放加载失败，请刷新页面重试。',
   },
 }
 
 // Chinese guides and frame captions live with each original transcript.
 const englishGuides = new Map([
-  ['japan-trip', {
-    title: 'Replaying a Japan trip · Full session',
-    description: 'Follow the photo selection, transit corrections and film recordings, through to exporting the session with Encore. The original order is preserved and sensitive details are masked.',
-  }],
   ['ai-tree-1014', {
     title: '70 Years of AI · Making the first cut',
     description: 'How would you tell the history of AI to your family? After discussing a hand-drawn style and narration, Claude called on seven sub-agents to check the history and prepare a script for a 4-minute, 10-second preview.',
@@ -72,117 +68,94 @@ const englishGuides = new Map([
 ])
 
 const url = new URL(location.href)
-const requestedId = url.searchParams.get('demo')
-const firstId = 'ai-tree-1014'
-const demoId = englishGuides.has(requestedId) ? requestedId : firstId
-const demoBase = './demos/' + demoId + '/'
-const mediaBase = demoId === 'japan-trip' ? 'https://encore-media.niracler.com/japan-trip/v1/' : demoBase
-const filmDemo = demoId === 'japan-trip' ? 'japan-trip' : 'ai-tree-1015'
 const requestedLang = url.searchParams.get('lang')
 let lang = ['en', 'zh'].includes(requestedLang)
   ? requestedLang
   : navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'
 
-const languageButton = document.querySelector('#showcase-language')
-const copyButton = document.querySelector('#encore-copy-btn')
-const mount = document.querySelector('#encore-showcase-player')
-const filmLink = document.querySelector('#watch-film')
-let session
-let player
-let copyTimer
+const mount = document.querySelector('[data-case-id]')
 
-function renderPage() {
+function renderDirectory() {
   const messages = copy[lang]
   document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en'
+  const languageButton = document.querySelector('#showcase-language')
   languageButton.lang = lang === 'zh' ? 'en' : 'zh-CN'
   languageButton.textContent = lang === 'zh' ? 'English' : '中文'
   document.querySelectorAll('[data-text]').forEach(el => { el.textContent = messages[el.dataset.text] })
   document.querySelectorAll('[data-label]').forEach(el => { el.setAttribute('aria-label', messages[el.dataset.label]) })
-  const cases = document.querySelectorAll('[data-case]')
-  for (const link of cases) {
-    const target = new URL(location.href)
-    target.hash = ''
-    target.searchParams.set('demo', link.dataset.case)
+  for (const link of document.querySelectorAll('.showcase-directory a')) {
+    const target = new URL(link.href)
     target.searchParams.set('lang', lang)
     link.href = target
-    if (link.dataset.case === demoId) link.setAttribute('aria-current', 'page')
   }
-  filmLink.hidden = !['ai-tree-1014', 'ai-tree-1015', 'japan-trip'].includes(demoId)
-  filmLink.href = `?demo=${filmDemo}&lang=${lang}#film`
-  document.querySelector('[data-case][aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-  const error = mount.querySelector('.encore-load-error')
-  if (error) error.textContent = messages.loadError
 }
 
-async function renderReplay() {
-  const localized = { ...session }
-  if (lang === 'en') {
-    const guide = englishGuides.get(demoId)
-    localized.title = guide.title
-    localized.description = guide.description
-    if (guide.frames) {
-      localized.frames = session.frames.map((frame, index) => ({ ...frame, label: guide.frames[index] }))
-    }
-    if (guide.deliverables) {
-      localized.deliverables = session.deliverables.map((file, index) => ({ ...file, ...guide.deliverables[index] }))
-    }
-  }
-  document.querySelector('meta[name="description"]').content = localized.description
-  const controller = player?.getController()
-  const initialStep = controller?.getPlayHead() ?? -1
-  controller?.destroy()
-  player = await window.EncorePlayer.create(mount, localized, {
-    lang, initialStep, baseUrl: mediaBase, showLangToggle: false,
-  })
-  mount.querySelectorAll('.session-you .session-bubble, .session-ai-body').forEach(el => { el.lang = 'zh-CN' })
-}
-
-function showFilm() {
-  const video = mount.querySelector('[data-final-files] video') || mount.querySelector('.session-files video')
-  const controller = player.getController()
-  controller.setPlaying(false)
-  controller.goToStage(Number(video.closest('[data-for-step]').dataset.forStep), false)
-  video.focus({ preventScroll: true })
-  video.closest('figure').scrollIntoView({ block: 'center' })
-}
-
-filmLink.addEventListener('click', event => {
-  if (demoId !== filmDemo || !player || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return
-  event.preventDefault()
-  showFilm()
-})
-
-languageButton.addEventListener('click', async () => {
-  lang = lang === 'en' ? 'zh' : 'en'
-  url.searchParams.set('lang', lang)
-  history.replaceState(null, '', url)
-  renderPage()
-  if (session) await renderReplay()
-})
-
-copyButton.addEventListener('click', async () => {
-  clearTimeout(copyTimer)
+async function renderReplay(demoId) {
+  document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en'
+  const backHref = '../../?lang=' + lang
+  const messages = copy[lang]
+  const back = document.createElement('a')
+  back.href = backHref
+  back.textContent = messages.back
+  back.className = 'session-back'
+  const status = document.createElement('p')
+  status.className = 'encore-loading'
+  status.setAttribute('role', 'status')
+  status.textContent = lang === 'zh' ? '正在加载回放…' : 'Loading replay…'
+  mount.append(back, status)
   try {
-    await navigator.clipboard.writeText(document.querySelector('#encore-cli-cmd').textContent)
-    copyButton.textContent = copy[lang].copied
-  } catch {
-    copyButton.textContent = copy[lang].copyFailed
+    const response = await fetch('./session.json')
+    if (!response.ok) throw new Error('HTTP ' + response.status)
+    const session = await response.json()
+    const guide = lang === 'en' && englishGuides.get(demoId)
+    if (guide) {
+      session.title = guide.title
+      session.description = guide.description
+      if (guide.frames) session.frames = session.frames.map((frame, i) => ({ ...frame, label: guide.frames[i] }))
+      if (guide.deliverables) session.deliverables = session.deliverables.map((file, i) => ({ ...file, ...guide.deliverables[i] }))
+    }
+    const baseUrl = demoId === 'japan-trip' ? 'https://encore-media.niracler.com/japan-trip/v1/' : './'
+    const player = await window.EncorePlayer.create(mount, session, {
+      lang, baseUrl, backHref, backLabel: messages.back, showLangToggle: false,
+    })
+    mount.querySelectorAll('.session-you .session-bubble, .session-ai-body').forEach(el => { el.lang = 'zh-CN' })
+    if (location.hash === '#film') {
+      const video = mount.querySelector('[data-final-files] video') || mount.querySelector('.session-files video')
+      if (video) {
+        player.getController().goToStage(Number(video.closest('[data-for-step]').dataset.forStep), false)
+        video.focus({ preventScroll: true })
+        video.closest('figure').scrollIntoView({ block: 'center' })
+      }
+    }
+  } catch (error) {
+    console.error(error)
+    status.className = 'encore-load-error'
+    status.setAttribute('role', 'alert')
+    status.textContent = messages.loadError
+    mount.replaceChildren(back, status)
   }
-  copyTimer = setTimeout(() => { copyButton.textContent = copy[lang].copy }, 1600)
-})
+}
 
-renderPage()
-try {
-  const response = await fetch(demoBase + 'session.json')
-  if (!response.ok) throw new Error('HTTP ' + response.status)
-  session = await response.json()
-  await renderReplay()
-  if (demoId === filmDemo && url.hash === '#film') showFilm()
-} catch (error) {
-  console.error(error)
-  const message = document.createElement('p')
-  message.className = 'encore-load-error'
-  message.setAttribute('role', 'alert')
-  message.textContent = copy[lang].loadError
-  mount.replaceChildren(message)
+if (mount) {
+  await renderReplay(mount.dataset.caseId)
+} else {
+  renderDirectory()
+  document.querySelector('#showcase-language').addEventListener('click', () => {
+    lang = lang === 'en' ? 'zh' : 'en'
+    url.searchParams.set('lang', lang)
+    history.replaceState(null, '', url)
+    renderDirectory()
+  })
+  const copyButton = document.querySelector('#encore-copy-btn')
+  let copyTimer
+  copyButton.addEventListener('click', async () => {
+    clearTimeout(copyTimer)
+    try {
+      await navigator.clipboard.writeText(document.querySelector('#encore-cli-cmd').textContent)
+      copyButton.textContent = copy[lang].copied
+    } catch {
+      copyButton.textContent = copy[lang].copyFailed
+    }
+    copyTimer = setTimeout(() => { copyButton.textContent = copy[lang].copy }, 1600)
+  })
 }

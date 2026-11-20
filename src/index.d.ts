@@ -222,7 +222,7 @@ export function attachPlayerController(
 export function createEncorePlayer(
   target: string | HTMLElement,
   sourceOrSession?: string | EncoreSession,
-  options?: { baseUrl?: string; lang?: PlayerLang | 'auto'; initialStep?: number; showLangToggle?: boolean }
+  options?: { baseUrl?: string; lang?: PlayerLang | 'auto'; initialStep?: number; backHref?: string; backLabel?: string; showLangToggle?: boolean }
 ): Promise<{ setLang: (nextLang: PlayerLang) => void; getController: () => Record<string, any> | null }>
 
 export function buildStandalonePlayerJs(options?: { write?: boolean }): string

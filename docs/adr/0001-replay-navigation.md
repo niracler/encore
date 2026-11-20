@@ -6,4 +6,4 @@ Clicking a message body, a point on the timeline, or a timeline label pauses the
 
 Each Step occupies an equal share of the timeline. The time beside the Step count shows elapsed time in the original Session, so a long break between messages is still visible in the timestamps.
 
-Existing Frame labels and document titles supply candidates for timeline labels. The Player displays as many as fit without overlap at the available width. Every Step remains reachable along the track. This works for a plain CLI export and for an embedded Player, and authors can refine the titles during Curation.
+The timeline draws one segment per Step. Compactions, Frames, documents, and Turns supply markers. The Player fits captions, icons, and Turn dots to the available width and exposes details on hover or focus. Every Step remains reachable along the track. This works for a plain CLI export and for an embedded Player, and authors can refine the titles during Curation.
