@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 import {
@@ -735,4 +735,40 @@ test('structured tool metadata (kind, file, skill) keeps right-hand context chip
   assert.equal(workStep.docs?.length, 1)
   assert.equal(workStep.docs[0].file, '1.1.md')
   assert.equal(workStep.docs[0].title, '第一讲：为什么 AI 总在一本正经地胡说八道？')
+})
+
+test('buildReplay without outDir writes to the OS temp directory instead of cwd/replays', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'encore-default-out-'))
+  const previousCwd = process.cwd()
+  let builtDir
+  try {
+    const logPath = join(workspace, `rollout-default-out-${Date.now().toString(36)}.jsonl`)
+    const records = [
+      { type: 'session_meta', timestamp: '2026-11-19T10:00:00.000Z', payload: { model: 'gpt-5.4' } },
+      {
+        type: 'response_item',
+        timestamp: '2026-11-19T10:00:01.000Z',
+        payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Check default temp output directory' }] },
+      },
+      {
+        type: 'response_item',
+        timestamp: '2026-11-19T10:00:02.000Z',
+        payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Verified.' }] },
+      },
+    ]
+    writeFileSync(logPath, records.map(row => JSON.stringify(row)).join('\n'), 'utf8')
+    process.chdir(workspace)
+
+    const result = await buildReplay(logPath, { images: false })
+    builtDir = result.dir
+    const relToTmp = relative(resolve(tmpdir()), result.dir)
+    assert.ok(relToTmp && relToTmp !== '..' && !relToTmp.startsWith(`..${sep}`) && !isAbsolute(relToTmp))
+    assert.equal(existsSync(join(workspace, 'replays')), false)
+    assert.ok(existsSync(join(result.dir, 'session.json')))
+    assert.ok(existsSync(join(result.dir, 'index.html')))
+  } finally {
+    process.chdir(previousCwd)
+    if (builtDir) rmSync(builtDir, { recursive: true, force: true })
+    rmSync(workspace, { recursive: true, force: true })
+  }
 })

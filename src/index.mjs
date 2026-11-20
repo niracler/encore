@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { readClaudeAi } from './claude-ai.mjs'
 import { prepareAttachmentPreviews } from './attachment-previews.mjs'
@@ -33,7 +34,10 @@ function defaultOutDirForLog(filePath, tool) {
     .replace(/^-+|-+$/g, '')
     .slice(0, 32)
   const slug = base || `${tool || 'session'}-${Date.now().toString(36)}`
-  return resolve('replays', slug)
+  const bucket = process.platform === 'linux' && typeof process.getuid === 'function'
+    ? `encore-${process.getuid()}`
+    : 'encore'
+  return resolve(tmpdir(), bucket, slug)
 }
 
 export async function importRawSession(files, {
