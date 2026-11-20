@@ -1,5 +1,6 @@
 const copy = {
   en: {
+    japanTrip: 'Japan trip replay', japanMeta: 'Full session · Both films',
     tagline: 'Bring your AI agent sessions back on stage — like asciinema, for AI agents.',
     command: 'Quick start command', copyCommand: 'Copy CLI command', copy: 'Copy',
     copied: 'Copied!', copyFailed: 'Copy failed', cases: 'Live cases',
@@ -10,6 +11,7 @@ const copy = {
     film: 'Watch the final film', loadError: 'Could not load this replay. Refresh the page to try again.',
   },
   zh: {
+    japanTrip: '日本游记地图回放', japanMeta: '完整会话 · 两份有声成片',
     tagline: '回放 AI Agent 的工作过程，像用 asciinema 回看终端操作一样。',
     command: '快速开始命令', copyCommand: '复制命令', copy: '复制',
     copied: '已复制', copyFailed: '复制失败', cases: '案例回放',
@@ -23,6 +25,10 @@ const copy = {
 
 // Chinese guides and frame captions live with each original transcript.
 const englishGuides = new Map([
+  ['japan-trip', {
+    title: 'Replaying a Japan trip · Full session',
+    description: 'Follow the photo selection, transit corrections and film recordings, through to exporting the session with Encore. The original order is preserved and sensitive details are masked.',
+  }],
   ['ai-tree-1014', {
     title: '70 Years of AI · Making the first cut',
     description: 'How would you tell the history of AI to your family? After discussing a hand-drawn style and narration, Claude called on seven sub-agents to check the history and prepare a script for a 4-minute, 10-second preview.',
@@ -70,6 +76,8 @@ const requestedId = url.searchParams.get('demo')
 const firstId = 'ai-tree-1014'
 const demoId = englishGuides.has(requestedId) ? requestedId : firstId
 const demoBase = './demos/' + demoId + '/'
+const mediaBase = demoId === 'japan-trip' ? 'https://encore-media.niracler.com/japan-trip/v1/' : demoBase
+const filmDemo = demoId === 'japan-trip' ? 'japan-trip' : 'ai-tree-1015'
 const requestedLang = url.searchParams.get('lang')
 let lang = ['en', 'zh'].includes(requestedLang)
   ? requestedLang
@@ -99,8 +107,8 @@ function renderPage() {
     link.href = target
     if (link.dataset.case === demoId) link.setAttribute('aria-current', 'page')
   }
-  filmLink.hidden = !['ai-tree-1014', 'ai-tree-1015'].includes(demoId)
-  filmLink.href = `?demo=ai-tree-1015&lang=${lang}#film`
+  filmLink.hidden = !['ai-tree-1014', 'ai-tree-1015', 'japan-trip'].includes(demoId)
+  filmLink.href = `?demo=${filmDemo}&lang=${lang}#film`
   document.querySelector('[data-case][aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   const error = mount.querySelector('.encore-load-error')
   if (error) error.textContent = messages.loadError
@@ -124,13 +132,13 @@ async function renderReplay() {
   const initialStep = controller?.getPlayHead() ?? -1
   controller?.destroy()
   player = await window.EncorePlayer.create(mount, localized, {
-    lang, initialStep, baseUrl: demoBase, showLangToggle: false,
+    lang, initialStep, baseUrl: mediaBase, showLangToggle: false,
   })
   mount.querySelectorAll('.session-you .session-bubble, .session-ai-body').forEach(el => { el.lang = 'zh-CN' })
 }
 
 function showFilm() {
-  const video = mount.querySelector('.session-files video')
+  const video = mount.querySelector('[data-final-files] video') || mount.querySelector('.session-files video')
   const controller = player.getController()
   controller.setPlaying(false)
   controller.goToStage(Number(video.closest('[data-for-step]').dataset.forStep), false)
@@ -139,7 +147,7 @@ function showFilm() {
 }
 
 filmLink.addEventListener('click', event => {
-  if (demoId !== 'ai-tree-1015' || !player || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return
+  if (demoId !== filmDemo || !player || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return
   event.preventDefault()
   showFilm()
 })
@@ -169,7 +177,7 @@ try {
   if (!response.ok) throw new Error('HTTP ' + response.status)
   session = await response.json()
   await renderReplay()
-  if (demoId === 'ai-tree-1015' && url.hash === '#film') showFilm()
+  if (demoId === filmDemo && url.hash === '#film') showFilm()
 } catch (error) {
   console.error(error)
   const message = document.createElement('p')

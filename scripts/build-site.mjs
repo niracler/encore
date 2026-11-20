@@ -323,6 +323,10 @@ const html = `<!doctype html>
     <div class="showcase-switcher-inner">
       <span class="showcase-switcher-label" data-text="cases">Live Cases</span>
       <div class="showcase-demo-tabs">
+        <a class="showcase-demo-tab" href="?demo=japan-trip" data-case="japan-trip">
+          <span class="showcase-agent-badge is-codex">Codex</span>
+          <span class="showcase-demo-text"><strong data-text="japanTrip">Japan trip replay</strong><small data-text="japanMeta">Full session · Both films</small></span>
+        </a>
         <a class="showcase-demo-tab" href="?demo=ai-tree-1014" data-case="ai-tree-1014">
           <span class="showcase-agent-badge is-claude-ai">Claude.ai</span>
           <span class="showcase-demo-text"><strong data-text="first">70 Years of AI · First cut</strong><small data-text="firstMeta">From idea to preview</small></span>

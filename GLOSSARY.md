@@ -40,6 +40,9 @@ _Avoid_: Item, Entry, Message (as the umbrella term)
 The smallest playback unit of a Session—grouping one or more consecutive Events into a single advancement of the Player with its own context snapshot.
 _Avoid_: Group, Chunk, Beat
 
+**Playback Position**:
+The last Step revealed in a Replay, or the starting position before the first Step. It determines the current Context Snapshot and which Step plays next.
+
 **Turn**:
 One complete cycle of collaboration initiated by a user message and spanning every Step until the next user message or the end of the Session.
 _Avoid_: Prompt (for the whole cycle), Round, Exchange
