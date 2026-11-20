@@ -45,6 +45,24 @@ Options:
   -h, --help               Show this help message
 `.trim()
 
+async function withBuildProgress(build) {
+  const output = process.stderr
+  if (!output.isTTY) return build()
+
+  const frames = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+  let index = 0
+  const draw = () => output.write(`\r${frames[index++ % frames.length]} Building replay…`)
+  draw()
+  const timer = setInterval(draw, 100)
+  try {
+    return await build()
+  } finally {
+    clearInterval(timer)
+    readline.cursorTo(output, 0)
+    readline.clearLine(output, 0)
+  }
+}
+
 function printBuildReport(result) {
   const { mode, toolLabel, dir, sessionFile, session, leaks } = result
   const relDir = relative(process.cwd(), dir) || '.'
@@ -231,12 +249,12 @@ async function main() {
   // Subcommand: `encore play <dir>` or `encore preview <dir>`
   if (positionals[0] === 'play' || positionals[0] === 'preview') {
     const targetDir = resolve(positionals[1] || '.')
-    const rebuilt = await rebuildReplayDir(targetDir, {
+    const rebuilt = await withBuildProgress(() => rebuildReplayDir(targetDir, {
       assetRoots: values['asset-root'],
       lang: values.lang,
       title: values.title,
       description: values.desc,
-    })
+    }))
     printBuildReport(rebuilt)
     const { url } = await serveReplayDir(rebuilt.dir, { port, open: !hasNoOpen })
     console.log(`\n🎬 Encore stage live at ${url} (Ctrl+C to stop)`)
@@ -275,7 +293,7 @@ async function main() {
     explicitTool = picked.tool
   }
 
-  const result = await buildReplay(targets, {
+  const result = await withBuildProgress(() => buildReplay(targets, {
     assetRoots: values['asset-root'],
     tool: explicitTool,
     outDir: values.out,
@@ -289,7 +307,7 @@ async function main() {
     clip: values.clip ? Number(values.clip) : undefined,
     conversation: values.conversation,
     includeMemory: hasIncludeMemory,
-  })
+  }))
 
   printBuildReport(result)
 

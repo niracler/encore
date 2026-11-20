@@ -30,6 +30,29 @@
   -webkit-font-smoothing: antialiased;
 }
 
+.encore-loading {
+  display: flex;
+  min-height: 100dvh;
+  align-items: center;
+  justify-content: center;
+  gap: .75rem;
+  color: var(--site-muted);
+}
+.encore-loading::before {
+  content: "";
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .encore-loading::before { animation: encore-loading-spin .8s linear infinite; }
+}
+@keyframes encore-loading-spin {
+  to { transform: rotate(1turn); }
+}
+
 :where(.session-bubble, .session-detail) a {
   display: inline;
   color: #2563eb;
