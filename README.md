@@ -30,7 +30,9 @@ Requires **Node.js >= 20.10**. No global install needed.
 npx @niracler/encore@latest
 ```
 
-Choose a recent session to open its replay in your browser.
+The interactive picker scans recent local **Codex**, **Claude Code**, and **WorkBuddy** sessions and opens the selected replay in your browser. You can also pass a `.jsonl` or `.jsonl.zst` raw log, or a Claude.ai `conversations.json` export directly.
+
+Without `-o`, replays write to a temporary directory. Pass `-o <dir>` to keep a portable copy for publishing; see `npx @niracler/encore@latest --help` for all commands and options.
 
 ---
 
@@ -40,26 +42,32 @@ Choose a recent session to open its replay in your browser.
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./docs/architecture-en-dark.webp">
     <source media="(prefers-color-scheme: light)" srcset="./docs/architecture-en-light.webp">
-    <img src="./docs/architecture-en-light.webp" alt="Encore architecture: from raw Agent logs and referenced local files in Asset Roots to a portable Replay and standalone Player" width="100%">
+    <img src="./docs/architecture-en-light.webp" alt="Encore architecture: from raw Agent logs and referenced local files in Asset Roots, through automatic CLI export and optional pre-publish Curation, to a portable Replay and standalone Player" width="100%">
   </picture>
 </p>
 
-- **Local-only processing**: Adapters, WebP frame extraction, and automatic redaction all run locally in Node.js. Nothing is uploaded.
-- **Decoupled Session and Player**: `session.json`, extracted `.webp` frames, and collected files sit beside the zero-dependency player, so curation edits appear on browser reload.
-- **Explicit file collection (`main`, unreleased)**: On `main` ([Unreleased](./CHANGELOG.md#unreleased)), Encore collects locally referenced attachments and deliverables within allowed asset roots, generates in-place PDF and workbook previews, and labels each file as verified (matching SHA-256), an export-time copy, or missing. Quick Start runs npm release `0.2.0`, which extracts only embedded media and inline `.md` documents.
+- **Local-only processing**: Adapters, `.webp` frame extraction, automatic redaction, and leak checks all run locally in Node.js. Nothing is uploaded.
+- **Decoupled Session and Player**: `session.json`, extracted `.webp` frames, and collected files live beside the zero-dependency player, so edits to `session.json` appear on browser reload.
+- **Explicit file collection boundaries**: Encore collects locally referenced attachments and deliverables within allowed asset roots (defaulting to the current directory and native session workspace; override with `--asset-root`), builds in-place PDF and workbook previews, and labels each file as verified (matching SHA-256), an export-time copy, or missing.
 
 ---
 
 ## Curating Before Publishing (Optional)
 
-For personal review or internal archiving, the CLI export is ready to watch as-is—no skill needed.
+For personal review or internal archiving, the CLI export is ready to watch as-is—no skill needed. When preparing a replay for a blog, course, or public showcase, pair the export with the companion `encore` skill for a semantic curation pass.
 
-Before publishing a replay to a blog, course, or showcase, raw exports usually need an editorial pass: picking milestone frames, writing a clear title and opening description, trimming off-topic turns, and removing internal names that regex cannot catch. Because that requires reading context and inspecting images, Encore ships a companion `encore` skill for your Agent:
+**What the CLI handles automatically**
 
-| Stage | Handled by | What it does |
-| --- | --- | --- |
-| **Export** | Encore CLI (deterministic) | Converts the raw log, extracts `.webp` frames, redacts common secrets, paths, emails, and private IPs, and builds a standalone replay |
-| **Curate** | Agent + `encore` skill (semantic) | Inspects and labels milestone frames, writes the title and opening description, redacts internal codenames, names, and figures, trims off-topic turns, and rebuilds the replay |
+- Adapts the raw log, extracts deduplicated `.webp` frames, collects referenced attachments and deliverables from asset roots, and builds in-place previews
+- Redacts common API keys, private keys, JWTs, database URLs, emails, private IPs, and home paths, omits cross-session `MEMORY_SUMMARY` and user-level `CLAUDE.md` bodies by default, and runs a non-blocking leak check
+- Packages a standalone replay directory with the zero-dependency player
+
+**What the `encore` skill adds during curation**
+
+- **Curate & label frames**: Inspects `.webp` frames, drops noisy intermediate states, keeps key milestones, and replaces fallback labels with concrete descriptions
+- **Write intro & trim turns**: Drafts a concise `title` and opening `description` from full context, and trims off-topic opening or closing turns
+- **Manual redaction & file review**: Reviews leak check warnings, removes internal codenames, people's names, and business figures regex cannot detect, and audits raw files in `attachments/`
+- **Lossless rebuild**: Runs `npx @niracler/encore@latest <replay-dir>` to refresh player assets and previews, sync `<title>`, drop deleted frame references, and re-run the leak check without overwriting curation edits or added media
 
 Install the skill globally (or copy [`skills/encore/SKILL.md`](./skills/encore/SKILL.md) manually):
 
@@ -73,13 +81,13 @@ Then ask your Agent from any workspace:
 Use the encore skill to export my latest session and curate it for publishing.
 ```
 
-**Before sharing**: Automatic redaction only rewrites `session.json`; it never modifies copied PDFs, workbooks, images, or videos in `attachments/`. Review `session.json`, every kept `.webp` frame, and all packaged attachments and deliverables before publishing.
+> **Review before sharing**: Automatic redaction only rewrites `session.json`; it never modifies copied PDFs, workbooks, images, or videos in `attachments/`. Review `session.json`, every kept `.webp` frame, and all packaged attachments and deliverables before publishing.
 
 ---
 
 ## Embedding on Any Site
 
-Deploy the generated replay directory to GitHub Pages, Cloudflare Pages, Vercel, or any static host—or embed the player in an existing HTML page with three lines:
+Export with `-o ./replays/<slug>` and deploy the entire replay directory to GitHub Pages, Cloudflare Pages, Vercel, or any static host—or embed the player in an existing HTML page with three lines:
 
 ```html
 <link rel="stylesheet" href="./encore-player.css">
@@ -87,44 +95,10 @@ Deploy the generated replay directory to GitHub Pages, Cloudflare Pages, Vercel,
 <script src="./encore-player.js" defer></script>
 ```
 
-Omit `data-lang` to follow the language set in `session.json`.
+Omit `data-lang` to follow the language set in `session.json`. The player also natively renders optional curated extensions in `session.json`, including per-step audio (`item.audio`), landscape/portrait video switching, and PDF/workbook revision diffs.
 
 <details>
-<summary><strong>CLI Reference &amp; <code>session.json</code> Schema</strong></summary>
-
-### CLI Options
-
-The interactive picker scans `~/.codex/sessions`, `~/.claude/projects`, and `~/.workbuddy/projects`. You can also pass a `.jsonl` or `.jsonl.zst` raw log, or a Claude.ai `conversations.json` export directly.
-
-```text
-Usage:
-  encore                              Scan recent Codex, Claude Code & WorkBuddy sessions and pick one interactively
-  encore <log.jsonl | dir> [options]  Build a replay from a raw log, or rebuild an existing replay directory
-  encore play <dir> [--port 4180]     Start local preview server for an existing replay directory
-
-Options:
-  -o, --out <dir>          Output directory (default: temporary directory on main; ./replays/<session-slug> in 0.2.0)
-      --asset-root <dir>   Set allowed asset roots for attachments and deliverables (repeatable; unreleased on main)
-  -l, --lang <zh|en|auto>  Player UI language (default: auto; also toggleable in the topbar)
-      --title <text>       Override session title
-      --desc <text>        Set opening description shown before playback starts
-      --from <iso-time>    Start time window filter (e.g. 2026-11-10T09:00)
-      --to <iso-time>      End time window filter
-      --no-images          Skip extracting embedded images to .webp
-      --image-width <px>   Max width for extracted WebP frames (default: 960)
-      --clip <chars>       Max chars per tool input/output (default: 1500/2000)
-      --conversation <id>  Conversation UUID for multi-chat Claude.ai exports
-      --include-memory     Include full cross-session MEMORY_SUMMARY and user-level CLAUDE.md text (omitted by default)
-      --list               List recent local sessions without interactive prompt
-      --serve              Start local HTTP preview server after building
-      --no-serve           Do not start local HTTP preview server
-      --no-open            Do not automatically open browser when serving
-  -p, --port <number>      Preview server port (default: 4180)
-  -v, --version            Show version number
-  -h, --help               Show help message
-```
-
-### `session.json` Schema
+<summary><strong><code>session.json</code> Schema</strong></summary>
 
 Formal JSON Schema: [`schema/session.schema.json`](./schema/session.schema.json) (`https://encore.niracler.com/schema/session.schema.json`) · TypeScript Definitions: [`src/index.d.ts`](./src/index.d.ts)
 
@@ -150,28 +124,38 @@ Formal JSON Schema: [`schema/session.schema.json`](./schema/session.schema.json)
 
 </details>
 
-<details>
-<summary><strong>FAQ</strong></summary>
+---
 
-**Does Encore upload my logs? How does redaction work?**
-No. Everything runs locally. During export, automatic redaction hides common API keys, private keys, JWTs, database credentials, emails, private IPs, and home directory paths (`~`). Cross-session `MEMORY_SUMMARY` and user-level `CLAUDE.md` bodies are omitted by default, and the leak check flags suspicious internal domains or URL token parameters without blocking export. Project codenames, business figures, and sensitive content inside frames, attachments, or deliverables still require manual review.
+## FAQ
 
-**Will deleting the original log or workspace files break a replay?**
-Everything packaged inside the replay directory (`session.json`, `.webp` frames, `attachments/`, and player files) stays playable after the raw log or workspace files are removed. Keep the replay directory intact; links to external URLs still depend on their hosts.
+### Does Encore upload my logs? How does redaction work?
 
-**Why doesn't double-clicking `index.html` (`file://`) work?**
-The player loads `./session.json` with `fetch()`, which browsers block on `file://` URLs for security reasons. Preview locally with `npx @niracler/encore@latest play ./replays/<session-slug>`, or serve the folder from any static host.
+**No—everything runs locally.**
 
-**Why is an attachment or deliverable missing, or marked as an export-time copy?**
-On `main` (unreleased), Encore collects locally referenced files from messages and handoff tools within allowed asset roots (defaulting to the current directory and native session workspace; override with `--asset-root`). Files written silently by shell commands may not be referenced, and missing files keep only their filename in place. When a file is found, the player marks it as verified only if its SHA-256 matches a digest recorded during the session; otherwise it is labeled as an export-time copy.
+- **Automatic redaction**: Hides common API keys, private keys, JWTs, database URLs, emails, private IPs, and home directory paths (replaced with `~`), omits cross-session `MEMORY_SUMMARY` and user-level `CLAUDE.md` bodies by default, and runs a non-blocking leak check.
+- **Manual review still needed**: Project codenames, business figures, and raw files copied into `attachments/` (PDFs, workbooks, images, videos) are never rewritten automatically.
 
-**Are the context-window token counts exact billing figures?**
-No—context snapshots visualize structure and growth rather than provider billing. When a raw log records actual token counts (including `preTokens` and `postTokens` around compactions), Encore displays them directly; when per-step totals or the 7 context categories are missing, Encore estimates proportions from content length.
+### Why doesn't double-clicking `index.html` work?
 
-**What if a raw replay is too long or has too many frames?**
-Pass `--from` and `--to` (ISO timestamps) to slice a specific time window during export. You can also curate `frames[]`, `items[]`, `title`, and `description` in `session.json`, then run `npx @niracler/encore@latest ./replays/<session-slug>` to rebuild player assets, sync `<title>`, drop references to deleted frames, and re-run the leak check. Rebuilding an existing replay preserves curation edits and added media, whereas re-importing from the raw log regenerates `.webp` frames.
+Browser security rules block `fetch('./session.json')` on `file://` URLs. Open the replay through the local preview server, or deploy the folder to any static host:
 
-</details>
+```bash
+npx @niracler/encore@latest play ./replays/<slug>
+```
+
+### Will deleting the raw log or source files break a replay?
+
+**No.** A replay directory is a self-contained static bundle (`session.json`, `.webp` frames, `attachments/`, and player assets). Keep the directory intact; only external URLs still depend on their hosts.
+
+### Why is an attachment labeled as an export-time copy or missing?
+
+- **Verified**: Found inside an allowed asset root with a SHA-256 matching the digest recorded in the session.
+- **Export-time copy**: Found at export time, but no matching session digest exists or the file changed afterward.
+- **Missing / Outside asset roots**: Referenced in the log, but absent on disk or outside the allowed asset roots (pass `--asset-root` to include another directory; the filename stays visible under the message).
+
+### Are token counts in the Context Snapshot exact billing figures?
+
+**No.** They visualize context structure and growth: when a raw log includes real token counts (including `preTokens` / `postTokens` around compactions), Encore displays them directly; when per-step totals or category breakdowns are missing, it estimates from content length.
 
 ---
 
