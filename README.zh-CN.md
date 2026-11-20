@@ -103,7 +103,7 @@ npx skills add niracler/encore -g
   encore play <dir> [--port 4180]     启动本地预览服务
 
 常用参数：
-  -o, --out <dir>          输出目录（默认：./replays/<会话短名>）
+  -o, --out <dir>          输出目录（main 默认为系统临时目录；0.2.0 为 ./replays/<会话短名>）
       --asset-root <dir>   指定允许收集附件与交付物的资产根目录，可重复使用（main 未发布功能）
   -l, --lang <zh|en|auto>  界面语言（默认：auto，网页右上角也可一键切换）
       --title <text>       自定义回放标题

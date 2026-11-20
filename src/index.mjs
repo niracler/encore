@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { readClaudeAi } from './claude-ai.mjs'
@@ -26,18 +26,16 @@ const readers = {
   'claude-ai': readClaudeAi,
 }
 
-function defaultOutDirForLog(filePath, tool) {
+function createDefaultOutDir(filePath, tool) {
   const base = basename(filePath)
     .replace(/\.jsonl(?:\.zst)?$|\.json$/i, '')
     .replace(/^rollout-/, '')
     .replace(/[^a-zA-Z0-9_-]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 32)
-  const slug = base || `${tool || 'session'}-${Date.now().toString(36)}`
-  const bucket = process.platform === 'linux' && typeof process.getuid === 'function'
-    ? `encore-${process.getuid()}`
-    : 'encore'
-  return resolve(tmpdir(), bucket, slug)
+    .replace(/-+$/g, '')
+  const slug = base || tool || 'session'
+  return mkdtempSync(join(resolve(tmpdir()), `encore-${slug}-`))
 }
 
 export async function importRawSession(files, {
@@ -60,7 +58,6 @@ export async function importRawSession(files, {
   if (!readers[detectedTool]) {
     throw new Error(`Unsupported session format: ${detectedTool}`)
   }
-  const targetDir = outDir ? resolve(outDir) : defaultOutDirForLog(fileList[0], detectedTool)
   const window = { from, to }
   const records = detectedTool === 'claude-ai' ? JSON.parse(readFileSync(fileList[0], 'utf8')) : await readJsonl(fileList, window)
   const nativeRoot = await nativeSessionRoot(fileList[0], detectedTool, records)
@@ -73,42 +70,50 @@ export async function importRawSession(files, {
   if (raw.description === undefined) raw.description = ''
   if (!raw.deliverables) raw.deliverables = []
 
-  if (existsSync(targetDir) && images) {
-    for (const name of readdirSync(targetDir).filter(file => file.endsWith('.webp'))) {
-      rmSync(join(targetDir, name))
+  const createdTempDir = !outDir
+  const targetDir = outDir ? resolve(outDir) : createDefaultOutDir(fileList[0], detectedTool)
+
+  try {
+    if (outDir && existsSync(targetDir) && images) {
+      for (const name of readdirSync(targetDir).filter(file => file.endsWith('.webp'))) {
+        rmSync(join(targetDir, name))
+      }
     }
-  }
 
-  const resolvedLang = resolveLang(lang === 'auto' ? undefined : lang)
-  const withImages = await extractImages(raw, targetDir, {
-    keep: images,
-    width: imageWidth,
-    lang: resolvedLang,
-  })
-  await collectExternalFiles(withImages, targetDir, assetRoots, nativeRoot)
-  const redacted = redactSession(withImages)
-  const limit = clip ? Number(clip) : undefined
-  const session = clipSession(redacted, limit ? { input: limit, output: limit } : undefined)
-  const leaks = findLeaks(session)
+    const resolvedLang = resolveLang(lang === 'auto' ? undefined : lang)
+    const withImages = await extractImages(raw, targetDir, {
+      keep: images,
+      width: imageWidth,
+      lang: resolvedLang,
+    })
+    await collectExternalFiles(withImages, targetDir, assetRoots, nativeRoot)
+    const redacted = redactSession(withImages)
+    const limit = clip ? Number(clip) : undefined
+    const session = clipSession(redacted, limit ? { input: limit, output: limit } : undefined)
+    const leaks = findLeaks(session)
 
-  mkdirSync(targetDir, { recursive: true })
-  await prepareAttachmentPreviews(session, targetDir)
-  const sessionFile = join(targetDir, 'session.json')
-  writeFileSync(sessionFile, `${JSON.stringify(session, null, 2)}\n`, 'utf8')
-  const assets = writePlayerAssets(targetDir, {
-    title: session.title,
-    lang: lang || session.lang || 'auto',
-  })
+    mkdirSync(targetDir, { recursive: true })
+    await prepareAttachmentPreviews(session, targetDir)
+    const sessionFile = join(targetDir, 'session.json')
+    writeFileSync(sessionFile, `${JSON.stringify(session, null, 2)}\n`, 'utf8')
+    const assets = writePlayerAssets(targetDir, {
+      title: session.title,
+      lang: lang || session.lang || 'auto',
+    })
 
-  return {
-    mode: 'import',
-    tool: detectedTool,
-    toolLabel: tools[detectedTool] || detectedTool,
-    dir: targetDir,
-    sessionFile,
-    session,
-    leaks,
-    assets,
+    return {
+      mode: 'import',
+      tool: detectedTool,
+      toolLabel: tools[detectedTool] || detectedTool,
+      dir: targetDir,
+      sessionFile,
+      session,
+      leaks,
+      assets,
+    }
+  } catch (err) {
+    if (createdTempDir) rmSync(targetDir, { recursive: true, force: true })
+    throw err
   }
 }
 

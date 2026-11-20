@@ -5,7 +5,7 @@ All notable changes to `@niracler/encore` will be documented in this file.
 ## [Unreleased]
 
 ### Changed
-- Importing a raw log without `-o` / `--out` now writes preview files to the OS temporary directory instead of `./replays/<slug>` in the current working directory.
+- Importing a raw log without `-o` / `--out` now writes preview files to a unique, owner-only directory in the OS temporary directory instead of `./replays/<slug>` in the current working directory.
 
 ### Added
 - Replays collect locally referenced attachments at the message or tool call that delivered them. The Player distinguishes files verified against a recorded SHA-256, copies found at export, and missing originals.

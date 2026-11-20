@@ -103,7 +103,7 @@ Usage:
   encore play <dir> [--port 4180]     Start local preview server for an existing replay directory
 
 Options:
-  -o, --out <dir>          Output directory (default: ./replays/<session-slug>)
+  -o, --out <dir>          Output directory (default: temporary directory on main; ./replays/<session-slug> in 0.2.0)
       --asset-root <dir>   Set allowed asset roots for attachments and deliverables (repeatable; unreleased on main)
   -l, --lang <zh|en|auto>  Player UI language (default: auto; also toggleable in the topbar)
       --title <text>       Override session title
