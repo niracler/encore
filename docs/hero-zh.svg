@@ -1,4 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 168" width="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 168" width="100%" role="img" aria-labelledby="title">
+  <title id="title">Encore · 回看一次 AI Agent 会话，看它怎么完成任务，交付了什么。</title>
   <defs>
     <linearGradient id="shimmerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%" stop-color="#ffffff" stop-opacity="0" />
@@ -11,7 +12,7 @@
   </defs>
   <style>
     .word-title { fill: #0f172a; font: 800 42px -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", system-ui, sans-serif; letter-spacing: -0.03em; }
-    .word-ipa { fill: #ea580c; font: 600 20px ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+    .word-ipa { fill: #b54708; font: 600 20px ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
     .pos-text { fill: #64748b; font: 600 13.5px -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", system-ui, sans-serif; letter-spacing: 0.04em; }
     .dict-def { fill: #64748b; font: 500 16px -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", system-ui, sans-serif; }
     .headline { fill: #0f172a; font: 700 19px -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", system-ui, sans-serif; }
@@ -23,6 +24,7 @@
       0% { transform: translateX(-360px); }
       100% { transform: translateX(1260px); }
     }
+    @media (prefers-reduced-motion: reduce) { .shimmer-sweep { display: none; } }
     @media (prefers-color-scheme: dark) {
       .word-title { fill: #f8fafc; }
       .word-ipa { fill: #fb923c; }
@@ -39,7 +41,7 @@
   <text x="328" y="48" class="pos-text">名词 · 感叹词 · 源自法语「安可 / 返场加演」</text>
 
   <text x="4" y="94" class="dict-def">「演出落幕后，观众意犹未尽，呼喊演员重返舞台再演一场。」</text>
-  <text x="4" y="130" class="headline">别让精彩的 AI Agent 协作死在冰冷的 .jsonl 日志里，叫它返场再演一场。</text>
+  <text x="4" y="130" class="headline">回看一次 AI Agent 会话，看它怎么完成任务，交付了什么。</text>
 
   <!-- Minimal 7-Segment Shimmer Rule -->
   <rect x="0" y="156" width="1200" height="4" rx="2" class="bar-track" />

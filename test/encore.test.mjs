@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import sharp from 'sharp'
@@ -49,7 +49,7 @@ test('timeline and renderPlayerWidget support both zh and en bilingual modes', (
   assert.match(lineZh.steps[0].contextSnapshot.categories[0].name, /系统提示词/)
 
   const htmlZh = renderPlayerWidget(sampleSession, lineZh, { lang: 'zh' })
-  assert.match(htmlZh, /当前上下文/)
+  assert.match(htmlZh, /上下文快照/)
   assert.match(htmlZh, /上下文压缩 #1/)
   assert.match(htmlZh, /▶ 播放/)
   assert.match(htmlZh, /<strong>1\.1 页<\/strong>/)
@@ -57,7 +57,7 @@ test('timeline and renderPlayerWidget support both zh and en bilingual modes', (
   const lineEn = timeline(sampleSession, { lang: 'en' })
   assert.equal(lineEn.steps[0].contextSnapshot.categories[0].name, 'System Prompt')
   const htmlEn = renderPlayerWidget(sampleSession, lineEn, { lang: 'en' })
-  assert.match(htmlEn, /Active Context/)
+  assert.match(htmlEn, /Context Snapshot/)
   assert.match(htmlEn, /Context Compaction #1/)
   assert.match(htmlEn, /▶ Play/)
 })
@@ -758,4 +758,57 @@ test('structured tool metadata (kind, file, skill) keeps right-hand context chip
   assert.equal(workStep.docs?.length, 1)
   assert.equal(workStep.docs[0].file, '1.1.md')
   assert.equal(workStep.docs[0].title, '第一讲：为什么 AI 总在一本正经地胡说八道？')
+})
+
+test('buildReplay without outDir writes to a unique, private OS temp directory instead of cwd/replays', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'encore-default-out-'))
+  const previousCwd = process.cwd()
+  const builtDirs = []
+  const makeLog = (dir, promptText) => {
+    mkdirSync(dir, { recursive: true })
+    const logPath = join(dir, 'rollout-shared-name.jsonl')
+    const records = [
+      { type: 'session_meta', timestamp: '2026-11-19T10:00:00.000Z', payload: { model: 'gpt-5.4' } },
+      {
+        type: 'response_item',
+        timestamp: '2026-11-19T10:00:01.000Z',
+        payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: promptText }] },
+      },
+      {
+        type: 'response_item',
+        timestamp: '2026-11-19T10:00:02.000Z',
+        payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Verified.' }] },
+      },
+    ]
+    writeFileSync(logPath, records.map(row => JSON.stringify(row)).join('\n'), 'utf8')
+    return logPath
+  }
+  try {
+    const firstLog = makeLog(join(workspace, 'project-a'), 'First session with shared filename')
+    const secondLog = makeLog(join(workspace, 'project-b'), 'Second session with shared filename')
+    process.chdir(workspace)
+
+    const first = await buildReplay(firstLog, { images: false })
+    builtDirs.push(first.dir)
+    const second = await buildReplay(secondLog, { images: false })
+    builtDirs.push(second.dir)
+
+    assert.notEqual(first.dir, second.dir)
+    assert.equal(existsSync(join(workspace, 'replays')), false)
+    for (const result of [first, second]) {
+      const relToTmp = relative(resolve(tmpdir()), result.dir)
+      assert.ok(relToTmp && !relToTmp.includes(sep) && relToTmp !== '..' && !isAbsolute(relToTmp))
+      if (process.platform !== 'win32') {
+        assert.equal(statSync(result.dir).mode & 0o777, 0o700)
+      }
+      assert.ok(existsSync(join(result.dir, 'session.json')))
+      assert.ok(existsSync(join(result.dir, 'index.html')))
+    }
+    assert.match(readFileSync(first.sessionFile, 'utf8'), /First session with shared filename/)
+    assert.match(readFileSync(second.sessionFile, 'utf8'), /Second session with shared filename/)
+  } finally {
+    process.chdir(previousCwd)
+    for (const dir of builtDirs) rmSync(dir, { recursive: true, force: true })
+    rmSync(workspace, { recursive: true, force: true })
+  }
 })

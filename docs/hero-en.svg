@@ -1,4 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 168" width="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 168" width="100%" role="img" aria-labelledby="title">
+  <title id="title">Encore · Replay an AI Agent session to see how it worked and what it delivered.</title>
   <defs>
     <linearGradient id="shimmerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%" stop-color="#ffffff" stop-opacity="0" />
@@ -11,7 +12,7 @@
   </defs>
   <style>
     .word-title { fill: #0f172a; font: 800 42px -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", system-ui, sans-serif; letter-spacing: -0.03em; }
-    .word-ipa { fill: #ea580c; font: 600 20px ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+    .word-ipa { fill: #b54708; font: 600 20px ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
     .pos-text { fill: #64748b; font: 600 13.5px -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", system-ui, sans-serif; letter-spacing: 0.04em; }
     .dict-def { fill: #64748b; font: 500 16px -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", system-ui, sans-serif; }
     .headline { fill: #0f172a; font: 700 19px -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", system-ui, sans-serif; }
@@ -23,6 +24,7 @@
       0% { transform: translateX(-360px); }
       100% { transform: translateX(1260px); }
     }
+    @media (prefers-reduced-motion: reduce) { .shimmer-sweep { display: none; } }
     @media (prefers-color-scheme: dark) {
       .word-title { fill: #f8fafc; }
       .word-ipa { fill: #fb923c; }
@@ -39,7 +41,7 @@
   <text x="328" y="48" class="pos-text">NOUN &amp; INTERJECTION · FRENCH « ENCORE » ("ONE MORE TIME")</text>
 
   <text x="4" y="94" class="dict-def">"A demand by an audience for an additional performance at the end of a show."</text>
-  <text x="4" y="130" class="headline">Great AI agent runs should not die in a cold .jsonl file. Call them back on stage.</text>
+  <text x="4" y="130" class="headline">Replay an AI Agent session to see how it worked and what it delivered.</text>
 
   <!-- Minimal 7-Segment Shimmer Rule -->
   <rect x="0" y="156" width="1200" height="4" rx="2" class="bar-track" />

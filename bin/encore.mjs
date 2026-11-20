@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs'
 import { on } from 'node:events'
-import { dirname, join, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import readline from 'node:readline'
@@ -16,16 +16,16 @@ import {
 const pkgPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json')
 
 const HELP = `
-encore (@niracler/encore) — Bring your AI agent sessions back on stage.
+encore (@niracler/encore) — Replay an AI Agent session to see how it worked and what it delivered.
 
 Usage:
   encore                              Scan recent Codex, Claude Code & WorkBuddy sessions and pick one interactively
-  encore <log.jsonl | dir> [options]  Build a standalone replay directory from a log or re-render an edited session.json
+  encore <log.jsonl | dir> [options]  Build a replay from a raw log, or rebuild an existing replay directory
   encore play <dir> [--port 4180]     Start local preview server for an existing replay directory
 
 Options:
-  -o, --out <dir>          Output directory (default: ./replays/<session-slug>)
-      --asset-root <dir>   Set collection directories (repeatable; defaults to the current and native session workspaces)
+  -o, --out <dir>          Output directory (default: temporary directory)
+      --asset-root <dir>   Set allowed asset roots for attachments and deliverables (repeatable; defaults to cwd and native session workspace)
   -l, --lang <zh|en|auto>  Player UI language (default: auto)
       --title <text>       Override session title
       --desc <text>        Set opening description shown before playback starts
@@ -63,25 +63,28 @@ async function withBuildProgress(build) {
   }
 }
 
-function printBuildReport(result) {
+function printBuildReport(result, { isTempDefault = false } = {}) {
   const { mode, toolLabel, dir, sessionFile, session, leaks } = result
-  const relDir = relative(process.cwd(), dir) || '.'
-  const relSession = relative(process.cwd(), sessionFile) || 'session.json'
+  const shownDir = displayPath(dir)
+  const shownSession = displayPath(sessionFile)
   const count = type => (session.items || []).filter(item => item.type === type).length
   const framesCount = (session.frames || []).length
-  const action = mode === 'rebuild' ? 'Re-rendered' : 'Generated'
+  const action = mode === 'rebuild' ? 'Rebuilt' : 'Built'
 
-  console.log(`\n✨ ${action} replay in ${relDir}/`)
+  console.log(`\n✨ ${action} replay in ${shownDir.endsWith(sep) ? shownDir : `${shownDir}${sep}`}`)
   console.log(`   Title   : ${session.title}`)
   console.log(`   Agent   : ${toolLabel}${session.model ? ` · ${session.model}` : ''}`)
-  console.log(`   Steps   : ${count('user')} prompts · ${count('assistant')} replies · ${count('tool')} tool calls${count('compact') ? ` · ${count('compact')} compactions` : ''}`)
+  console.log(`   Events  : ${count('user')} user messages · ${count('assistant')} replies · ${count('tool')} tool calls${count('compact') ? ` · ${count('compact')} compactions` : ''}`)
   if (framesCount) {
-    console.log(`   Frames  : ${framesCount} WebP image(s) in frames[] (edit ${relSession} to prune or rename labels)`)
+    console.log(`   Frames  : ${framesCount} WebP frame(s) in frames[] (edit ${shownSession} to curate or relabel)`)
   }
   console.log(`   Files   : index.html, session.json, encore-player.js, encore-player.css`)
+  if (mode === 'import' && isTempDefault) {
+    console.log(`   Note    : Saved to a temporary directory. Pass -o <dir> to keep a portable copy.`)
+  }
 
   if (leaks.length) {
-    console.log(`\n⚠️  Privacy check found ${leaks.length} potential sensitive snippet(s) (non-blocking — review in ${relSession}):`)
+    console.log(`\n⚠️  Leak check found ${leaks.length} potential sensitive snippet(s) (non-blocking — review in ${shownSession}):`)
     for (const leak of leaks.slice(0, 12)) {
       console.log(`   - ${leak.path} · ${leak.rule} · ${leak.match}`)
     }
@@ -89,6 +92,12 @@ function printBuildReport(result) {
       console.log(`   ... and ${leaks.length - 12} more`)
     }
   }
+}
+
+function displayPath(targetPath) {
+  const rel = relative(process.cwd(), targetPath)
+  if (!rel) return '.'
+  return rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel) ? rel : targetPath
 }
 
 function truncateToColumns(str, maxCols) {
@@ -117,7 +126,7 @@ async function pickRecentSessionInteractive() {
       console.log(`  [${idx + 1}] ${s.timeLabel} · ${s.toolLabel.padEnd(11)} · ${s.preview}`)
       console.log(`      ${s.file} (${s.sizeKB} KB)`)
     })
-    console.log('\nRun: encore <file-path> -o ./replays/my-session')
+    console.log('\nRun: encore <file-path> -o ./my-replay')
     return null
   }
 
@@ -257,8 +266,8 @@ async function main() {
     }))
     printBuildReport(rebuilt)
     const { url } = await serveReplayDir(rebuilt.dir, { port, open: !hasNoOpen })
-    console.log(`\n🎬 Encore stage live at ${url} (Ctrl+C to stop)`)
-    console.log(`   Tip: Edit ${relative(process.cwd(), rebuilt.sessionFile) || 'session.json'} and refresh the browser to see changes immediately.`)
+    console.log(`\n🎬 Replay live at ${url} (Ctrl+C to stop)`)
+    console.log(`   Tip: Edit ${displayPath(rebuilt.sessionFile)} and refresh the browser to see changes immediately.`)
     return
   }
 
@@ -309,13 +318,13 @@ async function main() {
     includeMemory: hasIncludeMemory,
   }))
 
-  printBuildReport(result)
+  printBuildReport(result, { isTempDefault: !values.out })
 
   const shouldServe = hasServe || (!hasNoServe && Boolean(process.stdin.isTTY && process.stdout.isTTY))
   if (shouldServe) {
     const { url } = await serveReplayDir(result.dir, { port, open: !hasNoOpen })
-    console.log(`\n🎬 Encore stage live at ${url} (Ctrl+C to stop)`)
-    console.log(`   Tip: Edit ${relative(process.cwd(), result.sessionFile) || 'session.json'} and refresh the browser to see changes immediately.`)
+    console.log(`\n🎬 Replay live at ${url} (Ctrl+C to stop)`)
+    console.log(`   Tip: Edit ${displayPath(result.sessionFile)} and refresh the browser to see changes immediately.`)
   }
 }
 
