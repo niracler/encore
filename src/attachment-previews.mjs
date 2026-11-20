@@ -3,16 +3,35 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameS
 import { extname, join, resolve, sep } from 'node:path'
 import sharp from 'sharp'
 
-async function readWorkbook(bytes) {
-  const { default: ExcelJS } = await import('exceljs')
-  const workbook = new ExcelJS.Workbook()
-  // The preview reads worksheet cells. Excel table definitions can use producer-specific relationship paths.
-  await workbook.xlsx.load(bytes, { ignoreNodes: ['tableParts'] })
-  return workbook
+function assertZipArchive(bytes) {
+  const isZip = bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b
+    && ((bytes[2] === 0x03 && bytes[3] === 0x04) || (bytes[2] === 0x05 && bytes[3] === 0x06))
+  if (!isZip) throw new Error('Invalid XLSX archive')
 }
 
-function cellText(cell) {
-  return cell.value instanceof Date ? cell.value.toISOString() : cell.text
+function sheetRangeFromA1(sheet) {
+  const ref = sheet['!ref']
+  if (!ref) return undefined
+  const end = ref.includes(':') ? ref.split(':')[1] : ref
+  return `A1:${end}`
+}
+
+function cellText(value) {
+  if (value instanceof Date) return value.toISOString()
+  return value == null ? '' : String(value)
+}
+
+async function parseWorkbook(bytes, options = {}) {
+  assertZipArchive(bytes)
+  const { default: xlsx } = await import('node-xlsx')
+  return xlsx.parse(bytes, {
+    raw: true,
+    cellDates: true,
+    UTC: true,
+    defval: '',
+    blankrows: true,
+    ...options,
+  })
 }
 
 function readReplayAsset(directory, href) {
@@ -26,10 +45,10 @@ async function revisionValue(bytes, ext, revision) {
   if (ext === '.xlsx') {
     const address = /^([A-Z]+)([1-9]\d*)$/i.exec(revision.cell)
     if (!address || !revision.sheet) throw new Error('Expected a sheet name and A1 cell address')
-    const workbook = await readWorkbook(bytes)
-    const sheet = workbook.getWorksheet(revision.sheet)
+    const cell = revision.cell.toUpperCase()
+    const [sheet] = await parseWorkbook(bytes, { sheets: [revision.sheet], range: `${cell}:${cell}` })
     if (!sheet) throw new Error(`Worksheet not found: ${revision.sheet}`)
-    return cellText(sheet.getCell(revision.cell.toUpperCase()))
+    return cellText(sheet.data[0]?.[0])
   }
   const { PDFiumLibrary } = await import('@hyzyla/pdfium')
   const library = await PDFiumLibrary.init()
@@ -73,16 +92,11 @@ async function previewPdf(bytes, staging, url) {
 }
 
 async function previewWorkbook(bytes, staging, url, file) {
-  const workbook = await readWorkbook(bytes)
-  const sheets = workbook.worksheets.map(sheet => {
-    const data = []
-    sheet.eachRow({ includeEmpty: true }, row => {
-      const values = []
-      row.eachCell({ includeEmpty: true }, cell => values.push(cellText(cell)))
-      data.push(values)
-    })
-    return { sheet: sheet.name, data }
-  })
+  const parsed = await parseWorkbook(bytes, { range: sheetRangeFromA1 })
+  const sheets = parsed.map(({ name, data }) => ({
+    sheet: name,
+    data: data.map(row => row.map(cellText)),
+  }))
   const selected = sheets.find(sheet => sheet.sheet === file.previewSheet) || sheets[0]
   if (!selected) throw new Error('Empty workbook')
   const header = selected.data[0] || []
