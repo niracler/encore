@@ -42,3 +42,8 @@ All notable changes to `@niracler/encore` will be documented in this file.
 - Support for OpenAI Codex (`rollout-*.jsonl`), Claude Code (`projects/*.jsonl`), and Claude.ai (`conversations.json`) exports.
 - Live 7-bucket Context Window inspector, compaction handoff boundaries, sub-agent report modals, WebP frame extraction, and automatic privacy redaction.
 - Bilingual (`zh` / `en`) UI and companion curation skill (`skills/encore/SKILL.md`).
+
+[Unreleased]: https://github.com/niracler/encore/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/niracler/encore/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/niracler/encore/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/niracler/encore/releases/tag/v0.1.0
