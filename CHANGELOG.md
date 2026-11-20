@@ -4,12 +4,19 @@ All notable changes to `@niracler/encore` will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-20
+
 ### Changed
-- Importing a raw log without `-o` / `--out` now writes preview files to a unique, owner-only directory in the OS temporary directory instead of `./replays/<slug>` in the current working directory.
+- The default output for raw log imports moved from `./replays/<slug>` to a unique, owner-only directory in the OS temporary directory. To keep a replay, choose an output directory explicitly, for example `encore session.jsonl -o ./replays/my-session`.
 
 ### Added
 - Replays collect locally referenced attachments at the message or tool call that delivered them. The Player distinguishes files verified against a recorded SHA-256, copies found at export, and missing originals.
 - Packaged PDFs and workbooks open inside the Player. A curated revision can compare a specific PDF line or spreadsheet cell, and videos with a portrait cut can switch formats at the current time.
+- The CLI shows a progress indicator while building a replay in a terminal. The standalone Player displays a loading message while it reads the session.
+
+### Fixed
+- Replies containing nested Markdown code fences now render correctly. These replies could previously freeze the browser before the playback controls appeared.
+- The context inspector is visible on the mobile showcase, and playback keyboard shortcuts apply only when focus is inside the Player.
 
 ## [0.2.0] - 2026-11-19
 
