@@ -117,6 +117,7 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
   const tlTrack = timelineBar?.querySelector('[data-tl-track]')
   const tlPop = timelineBar?.querySelector('[data-tl-pop]')
   const tlRange = tlTrack?.querySelector('[data-tl-range]')
+  const cells = tlTrack?.querySelector('.session-tl-cells')?.children
   const tlPins = timelineBar ? [...timelineBar.querySelectorAll('[data-tl-jump]')] : []
   const lightbox = containerEl.querySelector('[data-session-lightbox]')
   const lightboxImg = lightbox?.querySelector('[data-lightbox-img]')
@@ -561,15 +562,17 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
     if (event.target === lightbox) closeLightbox()
   })
 
+  let hoverStep = null
   function renderTimelineHover(idx) {
-    if (!tlPop) return
+    if (!tlPop || hoverStep === idx) return
+    hoverStep = idx
     if (idx === null || idx < 0 || idx >= steps.length) {
       tlPop.hidden = true
       return
     }
     const s = steps[idx]
     const pct = steps.length > 0 ? Math.min(88, Math.max(12, ((idx + 0.5) / steps.length) * 100)) : 50
-    const frame = s.frames?.[0]
+    const frame = s.frames?.find(frame => frame.who === 'ai') || s.frames?.[0]
     const doc = s.docs?.[0]
     const ci = s.compactInfo
     const thumbHtml = frame
@@ -585,7 +588,7 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
             ? t('tlPromptTitle', { turn: s.turn, summary: shorten(s.summary || '', 20) })
             : shorten(s.summary || t('tlStepFallback'), 24)
     const tokStr = `${((s.contextSnapshot?.totalTokens || 0) / 1000).toFixed(1)}k`
-    tlPop.style.left = `${pct.toFixed(1)}%`
+    tlPop.style.left = `clamp(min(130px, 50%), ${pct.toFixed(1)}%, max(50%, 100% - 130px))`
     tlPop.innerHTML = `${thumbHtml}<span class="session-tl-pop-meta"><small>${escapeHtml(t('tlStepMeta', { step: idx + 1, time: elapsedClock(s.t) }))}</small><b>${escapeHtml(headTitle)}</b><span>${escapeHtml(t('contextLabel'))} ≈${escapeHtml(tokStr)}</span></span>`
     tlPop.hidden = false
   }
@@ -597,19 +600,34 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
     goToStage(idx)
   }
 
-  // Reserve space for named Frames first, then fill the gaps with documents.
-  const labelOrder = [...tlPins].sort((a, b) => Number(b.hasAttribute('data-tl-frame')) - Number(a.hasAttribute('data-tl-frame')))
+  function seekFromTimeline(idx) {
+    const before = tlTrack.getBoundingClientRect()
+    jumpToStep(idx)
+    // On mobile the context list sits above the rail and can grow by several screens.
+    if (before.top >= 0 && before.bottom <= window.innerHeight) {
+      const delta = tlTrack.getBoundingClientRect().top - before.top
+      if (delta) window.scrollBy({ top: delta, behavior: 'instant' })
+    }
+  }
+
+  const priority = { compress: 0, frame: 1, doc: 2, turn: 3 }
+  const labelOrder = [...tlPins].sort((a, b) => priority[a.dataset.kind] - priority[b.dataset.kind])
   function fitTimelineLabels() {
     const width = tlTrack.clientWidth
     const occupied = []
-    for (const pin of labelOrder) {
-      const anchor = (Number(pin.dataset.tlJump) + 1) / steps.length * width
-      const left = Math.max(0, Math.min(width - pin.offsetWidth, anchor - pin.offsetWidth / 2))
-      const right = left + pin.offsetWidth
-      const fits = right <= width && occupied.every(span => right + 8 <= span.left || left >= span.right + 8)
-      pin.classList.toggle('is-visible', fits)
-      if (fits) {
+    // Fit full captions first. A crowded milestone can still appear as an icon.
+    for (const pin of labelOrder) pin.classList.remove('is-visible', 'is-compact')
+    for (const compact of [false, true]) {
+      const candidates = labelOrder.filter(pin => !pin.classList.contains('is-visible') && (compact || pin.dataset.kind !== 'turn'))
+      for (const pin of candidates) pin.classList.toggle('is-compact', compact)
+      const measured = candidates.map(pin => ({ pin, size: pin.offsetWidth }))
+      for (const { pin, size } of measured) {
+        const anchor = (Number(pin.dataset.tlJump) + 1.5) / (steps.length + 1) * width
+        const left = Math.max(0, Math.min(width - size, anchor - size / 2))
+        const right = left + size
+        if (right > width || occupied.some(span => right + 4 > span.left && left < span.right + 4)) continue
         pin.style.left = `${left}px`
+        pin.classList.add('is-visible')
         occupied.push({ left, right })
       }
     }
@@ -617,20 +635,28 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
 
   const labelObserver = tlPins.length ? new ResizeObserver(fitTimelineLabels) : null
   if (labelObserver) labelObserver.observe(tlTrack)
-  tlRange?.addEventListener('input', () => jumpToStep(tlRange.valueAsNumber - 1))
+  tlRange?.addEventListener('input', () => seekFromTimeline(tlRange.valueAsNumber - 1))
   tlRange?.addEventListener('pointerdown', () => { if (playing) setPlaying(false) })
   tlTrack?.addEventListener('pointermove', event => {
     const pin = event.target.closest('[data-tl-jump]')
     if (pin) return renderTimelineHover(Number(pin.dataset.tlJump))
     if (event.target !== tlRange || !steps.length) return renderTimelineHover(null)
     const rect = tlRange.getBoundingClientRect()
-    const step = Math.round((event.clientX - rect.left) / rect.width * steps.length)
+    const step = Math.floor((event.clientX - rect.left) / rect.width * (steps.length + 1))
     renderTimelineHover(Math.max(0, Math.min(steps.length - 1, step - 1)))
+  })
+  tlTrack?.addEventListener('focusin', event => {
+    const pin = event.target.closest('[data-tl-jump]')
+    renderTimelineHover(pin ? Number(pin.dataset.tlJump) : playHead)
+  })
+  tlTrack?.addEventListener('focusout', () => renderTimelineHover(null))
+  tlTrack?.addEventListener('keydown', event => {
+    if (event.key === 'Escape') renderTimelineHover(null)
   })
   tlTrack?.addEventListener('pointerleave', () => renderTimelineHover(null))
   tlTrack?.addEventListener('click', event => {
     const pin = event.target.closest('[data-tl-jump]')
-    if (pin) jumpToStep(Number(pin.dataset.tlJump))
+    if (pin) seekFromTimeline(Number(pin.dataset.tlJump))
   })
 
   asidePane?.addEventListener('click', event => {
@@ -1004,6 +1030,13 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
       tlRange.value = String(stepNumber)
       tlRange.setAttribute('aria-valuetext', t('tlStepMeta', { step: stepNumber, time: elapsedClock(curTime) }))
     }
+    if (cells) {
+      for (let i = 0; i < cells.length; i++) {
+        cells[i].classList.toggle('is-past', i > 0 && i < stepNumber)
+        cells[i].classList.toggle('is-active', i === stepNumber)
+      }
+    }
+    if (tlRange?.matches(':focus-visible')) renderTimelineHover(playHead)
     for (const pin of tlPins) pin.classList.toggle('is-on', Number(pin.dataset.tlJump) === playHead)
 
     let latestVisibleEntry
@@ -1208,7 +1241,7 @@ export async function createEncorePlayer(targetEl, sourceOrSession, options = {}
     const activeLang = resolveLang(options.lang || el.dataset.lang || appNode?.dataset.encoreLang || 'zh')
     const playerData = JSON.parse(preRenderedData.textContent)
     const footer = el.querySelector('[data-session-timeline]')
-    if (footer && !footer.querySelector('[data-tl-range]')) {
+    if (footer && !footer.querySelector('.session-tl-cells')) {
       footer.outerHTML = renderTimelineBar(playerData, createTranslator(activeLang))
     }
     const activeController = attachPlayerController(el, playerData, {
@@ -1253,7 +1286,7 @@ export async function createEncorePlayer(targetEl, sourceOrSession, options = {}
     if (activeController) activeController.destroy()
     activeLang = resolveLang(lang)
     const line = timeline(session, { lang: activeLang })
-    el.innerHTML = renderPlayerWidget(session, line, { lang: activeLang, baseUrl, showLangToggle: options.showLangToggle })
+    el.innerHTML = renderPlayerWidget(session, line, { ...options, lang: activeLang, baseUrl })
     if (session.title && document.querySelectorAll('[data-encore-player]').length <= 1) {
       document.title = `${session.title} · Encore`
     }

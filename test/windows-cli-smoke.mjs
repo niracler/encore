@@ -115,6 +115,7 @@ test('the packed CLI plays a long replay with readable and missing attachments',
   await page.getByRole('dialog').getByRole('button', { name: '关闭预览' }).click()
   await text.click()
   await expect(track).toHaveValue('1')
+  await expect(page.locator('.session-tl-cell').nth(1)).toHaveClass(/is-active/)
   await expect(counter).toHaveText('1')
   await expect(prompt.getByText('End of the replay.', { exact: true })).toBeHidden()
   await page.getByRole('button', { name: '播放', exact: true }).click()

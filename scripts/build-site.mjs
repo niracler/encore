@@ -1,4 +1,4 @@
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildStandalonePlayerJs } from '../src/player-assets.mjs'
@@ -36,6 +36,10 @@ for (const img of ['preview-zh.webp', 'preview-en.webp']) {
 
 const pkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'))
 
+const demoIds = readdirSync(demosSrcDir, { withFileTypes: true })
+  .filter(entry => entry.isDirectory() && existsSync(join(demosSrcDir, entry.name, 'session.json')))
+  .map(entry => entry.name)
+
 const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -50,6 +54,17 @@ const html = `<!doctype html>
   <meta property="og:image" content="https://encore.niracler.com/preview-en.webp">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f172a'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='ui-monospace,SFMono-Regular,Menlo,monospace' font-size='18' font-weight='700' fill='%23fb8f68'%3EE%3C/text%3E%3C/svg%3E">
+  <script>
+    const oldUrl = new URL(location.href)
+    const demo = oldUrl.searchParams.get('demo')
+    if (${JSON.stringify(demoIds)}.includes(demo)) {
+      const replay = new URL('./demos/' + demo + '/', oldUrl)
+      oldUrl.searchParams.delete('demo')
+      replay.search = oldUrl.search
+      replay.hash = oldUrl.hash
+      location.replace(replay)
+    }
+  </script>
   <link rel="stylesheet" href="./encore-player.css">
   <style>
     .showcase-shell {
@@ -172,63 +187,23 @@ const html = `<!doctype html>
       border-color: #94a3b8;
       background: #f1f5f9;
     }
-    .showcase-switcher {
-      flex: none;
-      border-bottom: 1px solid #e2e8f0;
-      background: #ffffff;
-      padding: 8px 20px;
+    .showcase-directory {
+      width: min(760px, calc(100% - 40px)); margin: clamp(32px, 8vh, 88px) auto;
     }
-    .showcase-switcher-inner {
-      width: min(1360px, 100%);
-      margin: 0 auto;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .showcase-switcher-label {
-      flex: none;
-      font: 600 11px/1 ui-monospace, "SF Mono", Menlo, monospace;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: #64748b;
-    }
-    .showcase-demo-tabs {
-      display: flex;
-      align-items: stretch;
-      gap: 8px;
-      overflow-x: auto;
-      scrollbar-width: none;
-      flex: 1;
-      padding: 1px 0;
-    }
-    .showcase-demo-tabs::-webkit-scrollbar {
-      display: none;
-    }
+    .showcase-directory h1 { font-size: clamp(26px, 4vw, 38px); letter-spacing: -.035em; margin: 0 0 20px; }
+    .showcase-list { border-top: 1px solid #cbd5e1; }
     .showcase-demo-tab {
-      flex: 0 0 auto;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 5px 10px;
-      border-radius: 8px;
-      border: 1px solid #e2e8f0;
-      background: #f8fafc;
-      color: #334155;
-      cursor: pointer;
-      text-align: left;
-      text-decoration: none;
-      transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+      display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 16px;
+      padding: 18px 8px; border-bottom: 1px solid #dbe3e7; color: inherit; text-decoration: none;
     }
-    .showcase-demo-tab:hover {
-      border-color: #cbd5e1;
-      background: #ffffff;
-    }
-    .showcase-demo-tab[aria-current="page"] {
-      border-color: #0f172a;
-      background: #ffffff;
-      color: #0f172a;
-      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
-    }
+    .showcase-directory .film-link { font-size: 13px; color: #315d73; }
+    .showcase-case { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; border-bottom: 1px solid #dbe3e7; }
+    .showcase-case .showcase-demo-tab { border-bottom: 0; }
+    .showcase-demo-tab:hover, .showcase-demo-tab:focus-visible { background: #edf2f4; }
+    .showcase-demo-tab .showcase-agent-badge { grid-column: 2; grid-row: 1; }
+    .showcase-demo-text { grid-column: 1; grid-row: 1; display: grid; gap: 3px; }
+    .showcase-demo-text strong { font-size: 17px; }
+    .showcase-demo-text small { color: #475569; font-size: 13px; }
     .showcase-agent-badge {
       flex: none;
       font: 600 10.5px/1 ui-monospace, "SF Mono", Menlo, monospace;
@@ -257,44 +232,7 @@ const html = `<!doctype html>
       color: #0369a1;
       border-color: #bae6fd;
     }
-    .showcase-demo-text {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      line-height: 1.15;
-    }
-    .showcase-demo-text strong {
-      font-size: 12px;
-      font-weight: 600;
-      color: inherit;
-      white-space: nowrap;
-    }
-    .showcase-demo-text small {
-      font-size: 10.5px;
-      color: #64748b;
-      white-space: nowrap;
-    }
     #showcase-language { cursor: pointer; }
-    #watch-film { color: #334155; font-size: 13px; }
-    .showcase-stage {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
-    .showcase-stage .session-wrap {
-      margin: 8px auto 12px;
-    }
-    @media (width <= 640px) {
-      .showcase-switcher-label {
-        display: none;
-      }
-    }
-    @media (width > 920px) {
-      .showcase-stage .session-app {
-        height: calc(100dvh - 128px);
-        min-height: 540px;
-      }
-    }
   </style>
 </head>
 <body class="encore-page showcase-shell">
@@ -319,42 +257,59 @@ const html = `<!doctype html>
       </div>
     </div>
   </header>
-  <nav class="showcase-switcher" aria-label="Live replay demos" data-label="cases">
-    <div class="showcase-switcher-inner">
-      <span class="showcase-switcher-label" data-text="cases">Live Cases</span>
-      <div class="showcase-demo-tabs">
-        <a class="showcase-demo-tab" href="?demo=japan-trip" data-case="japan-trip">
+  <main class="showcase-directory">
+    <h1 data-text="cases">Live cases</h1>
+    <nav class="showcase-list" aria-label="Live replay demos" data-label="cases">
+      <div class="showcase-case">
+        <a class="showcase-demo-tab" href="./demos/japan-trip/" data-case="japan-trip">
           <span class="showcase-agent-badge is-codex">Codex</span>
           <span class="showcase-demo-text"><strong data-text="japanTrip">Japan trip replay</strong><small data-text="japanMeta">Full session · Both films</small></span>
         </a>
-        <a class="showcase-demo-tab" href="?demo=ai-tree-1014" data-case="ai-tree-1014">
+        <a class="film-link" href="./demos/japan-trip/#film" data-text="film">Watch the film</a>
+      </div>
+        <a class="showcase-demo-tab" href="./demos/ai-tree-1014/" data-case="ai-tree-1014">
           <span class="showcase-agent-badge is-claude-ai">Claude.ai</span>
           <span class="showcase-demo-text"><strong data-text="first">70 Years of AI · First cut</strong><small data-text="firstMeta">From idea to preview</small></span>
         </a>
-        <a class="showcase-demo-tab" href="?demo=ai-tree-1015" data-case="ai-tree-1015">
+      <div class="showcase-case">
+        <a class="showcase-demo-tab" href="./demos/ai-tree-1015/" data-case="ai-tree-1015">
           <span class="showcase-agent-badge is-claude-ai">Claude.ai</span>
           <span class="showcase-demo-text"><strong data-text="final">70 Years of AI · Final cut</strong><small data-text="finalMeta">Revising after feedback</small></span>
         </a>
-        <a class="showcase-demo-tab" href="?demo=lesson-00-buyers-codex" data-case="lesson-00-buyers-codex">
+        <a class="film-link" href="./demos/ai-tree-1015/#film" data-text="film">Watch the film</a>
+      </div>
+        <a class="showcase-demo-tab" href="./demos/lesson-00-buyers-codex/" data-case="lesson-00-buyers-codex">
           <span class="showcase-agent-badge is-codex">Codex</span>
           <span class="showcase-demo-text"><strong data-text="buyers">Overseas lighting buyers</strong><small data-text="codexBuyersMeta">Three markets · 26 leads</small></span>
         </a>
-        <a class="showcase-demo-tab" href="?demo=lesson-00-buyers-workbuddy" data-case="lesson-00-buyers-workbuddy">
+        <a class="showcase-demo-tab" href="./demos/lesson-00-buyers-workbuddy/" data-case="lesson-00-buyers-workbuddy">
           <span class="showcase-agent-badge is-workbuddy">WorkBuddy</span>
           <span class="showcase-demo-text"><strong data-text="buyers">Overseas lighting buyers</strong><small data-text="workbuddyBuyersMeta">Retrying tasks · 32 leads</small></span>
         </a>
-      </div>
-      <a id="watch-film" href="?demo=ai-tree-1015#film" data-text="film">Watch the film</a>
-    </div>
-  </nav>
-  <main class="showcase-stage">
-    <div id="encore-showcase-player"></div>
+    </nav>
   </main>
-  <script src="./encore-player.js" defer></script>
   <script type="module" src="./showcase.js"></script>
 </body>
 </html>
 `
 
 writeFileSync(join(outDir, 'index.html'), html, 'utf8')
+for (const id of demoIds) {
+  const replay = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Encore</title>
+  <link rel="stylesheet" href="../../encore-player.css">
+  <style>.session-topbar .session-model-pill { display: none; }</style>
+</head>
+<body class="encore-page">
+  <main id="encore-showcase-player" data-case-id="${id}"></main>
+  <script src="../../encore-player.js" defer></script>
+  <script type="module" src="../../showcase.js"></script>
+</body>
+</html>`
+  writeFileSync(join(demosOutDir, id, 'index.html'), replay)
+}
 console.log(`Built Encore showcase site in ${outDir}`)
