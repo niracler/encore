@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://encore.niracler.com/?demo=poster-redesign&amp;lang=zh"><strong>看回放：Codex 重新设计课程海报</strong></a> ·
+  <a href="https://encore.niracler.com/?demo=poster-redesign&amp;lang=zh"><strong>演示啦演示</strong></a> ·
   <a href="./README.md">English</a>
 </p>
 
