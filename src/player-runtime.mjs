@@ -1,7 +1,7 @@
 import { createTranslator, resolveLang } from './i18n.mjs'
 import { attachAttachmentReaders } from './attachment-reader.mjs'
 import { escapeHtml } from './markdown.mjs'
-import { buildPlayerData, elapsedClock, renderPlayerWidget, renderTimelineBar, wallClock } from './render.mjs'
+import { buildPlayerData, categoryUsageLabel, contextUsageLabel, elapsedClock, renderPlayerWidget, renderTimelineBar, wallClock } from './render.mjs'
 import { timeline } from './timeline.mjs'
 
 const shorten = (text, length) => (text.length > length ? `${text.slice(0, length)}…` : text)
@@ -467,11 +467,18 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
       }
     }
     const totEl = asidePane.querySelector('[data-context-tot]')
-    if (totEl) totEl.textContent = `${(snap.totalTokens / 1000).toFixed(1)}k`
+    if (totEl) totEl.textContent = contextUsageLabel(snap, t, stepState.index < 0)
     const winEl = asidePane.querySelector('[data-context-win]')
-    if (winEl && snap.windowLabel) winEl.textContent = snap.windowLabel
+    if (winEl) winEl.textContent = snap.windowLabel || t('unknownCapacity')
+    const unit = asidePane.querySelector('[data-capacity-unit]')
+    if (unit) unit.hidden = !snap.windowLabel
     const pctEl = asidePane.querySelector('[data-context-pct]')
-    if (pctEl) pctEl.textContent = `${snap.pct}%`
+    if (pctEl) {
+      pctEl.parentElement.hidden = snap.pct == null
+      pctEl.textContent = snap.pct == null ? '' : snap.pct + '%'
+    }
+    const bar = asidePane.querySelector('[data-stacked-bar]')
+    if (bar) bar.hidden = snap.pct == null
 
     for (const [key, val] of Object.entries(snap.segments || {})) {
       const seg = asidePane.querySelector(`[data-seg="${key}"]`)
@@ -480,7 +487,7 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
 
     for (const [key, val] of Object.entries(snap.tokensByKind || {})) {
       const tokEl = asidePane.querySelector(`[data-pro-tok="${key}"]`)
-      if (tokEl) tokEl.textContent = `≈${(val / 1000).toFixed(1)}k`
+      if (tokEl) tokEl.textContent = categoryUsageLabel(val, t)
     }
 
     const browserBox = asidePane.querySelector('[data-context-browser]')
@@ -579,7 +586,7 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
       ? `<span class="session-tl-pop-thumb"><img src="${escapeHtml(frame.img)}" alt=""></span>`
       : ''
     const headTitle = ci
-      ? t('tlCompressTitle', { seq: ci.seq, dropped: ((ci.droppedTokens || 0) / 1000).toFixed(0) })
+      ? (ci.droppedTokens == null ? t('compactTitle', { seq: ci.seq }) : t('tlCompressTitle', { seq: ci.seq, dropped: (ci.droppedTokens / 1000).toFixed(0) }))
       : frame
         ? `🖼 ${frame.label}`
         : doc
@@ -587,9 +594,9 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
           : s.kind === 'prompt'
             ? t('tlPromptTitle', { turn: s.turn, summary: shorten(s.summary || '', 20) })
             : shorten(s.summary || t('tlStepFallback'), 24)
-    const tokStr = `${((s.contextSnapshot?.totalTokens || 0) / 1000).toFixed(1)}k`
+    const tokStr = contextUsageLabel(s.contextSnapshot, t)
     tlPop.style.left = `clamp(min(130px, 50%), ${pct.toFixed(1)}%, max(50%, 100% - 130px))`
-    tlPop.innerHTML = `${thumbHtml}<span class="session-tl-pop-meta"><small>${escapeHtml(t('tlStepMeta', { step: idx + 1, time: elapsedClock(s.t) }))}</small><b>${escapeHtml(headTitle)}</b><span>${escapeHtml(t('contextLabel'))} ≈${escapeHtml(tokStr)}</span></span>`
+    tlPop.innerHTML = `${thumbHtml}<span class="session-tl-pop-meta"><small>${escapeHtml(t('tlStepMeta', { step: idx + 1, time: elapsedClock(s.t) }))}</small><b>${escapeHtml(headTitle)}</b><span>${escapeHtml(t('contextLabel'))} ${escapeHtml(tokStr)}</span></span>`
     tlPop.hidden = false
   }
 

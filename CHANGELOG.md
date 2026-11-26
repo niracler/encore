@@ -4,6 +4,11 @@ All notable changes to `@niracler/encore` will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Antigravity replays use recorded context window limits and distinguish missing initial usage from zero. Native sessions can show the opening system prompt, tool schemas and system-side token estimates.
+- The timeline marks completed Antigravity checkpoints at their recorded times. The context meter no longer draws a fixed 80% auto-compaction threshold.
+- The interactive session picker shows the log size even when long titles are truncated or results are filtered by search.
+
 ## [0.4.0] - 2026-11-26
 
 ### Added

@@ -311,9 +311,9 @@ export function createTranscript() {
       }
       else add({ type: 'assistant', text, time, key, ...extra })
     },
-    reasoning(text, time) {
+    reasoning(text, time, extra) {
       text = String(text ?? '').trim()
-      if (text) add({ type: 'reasoning', text, time })
+      if (text) add({ type: 'reasoning', text, time, ...extra })
     },
     tool(id, tool, time) {
       const item = add({ type: 'tool', ...tool, time })

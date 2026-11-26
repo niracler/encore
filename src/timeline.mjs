@@ -17,6 +17,7 @@ function resolveWindowCapacity(tool = 'codex', model = '', contextWindow = 0) {
     return { tokens: contextWindow, label }
   }
   const t = String(tool || '').toLowerCase()
+  if (t.startsWith('antigravity')) return { tokens: null, label: null }
   const m = String(model || '').toLowerCase()
   if (
     t.startsWith('claude') ||
@@ -449,7 +450,7 @@ function assignFramesToGroups(rawGroups, frames = [], t) {
 }
 
 function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames = [], sessionStart = '', sessionMeta = {}, t) {
-  const windowSpec = resolveWindowCapacity(sessionTool, sessionModel, sessionMeta.contextWindow)
+  let windowSpec = resolveWindowCapacity(sessionTool, sessionModel, sessionMeta.contextWindow)
   const initCtx = sessionMeta.initialContext || {}
   const rawGroups = []
   let work = []
@@ -480,14 +481,14 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
       id: rec.id,
       tag: rec.tag || '',
       title: rec.title,
-      meta: rec.meta,
+      meta: observedOnly && rec.stepIndex >= 0 ? undefined : rec.meta,
       payload: rec.payload,
       ...(rec.images?.length ? { images: rec.images } : {}),
     }
     return entry
   }
 
-  // Antigravity transcripts contain observed steps, with no initial prompt or tool inventory.
+  // Antigravity metadata may contain only part of the mounted context.
   const observedOnly = sessionTool.startsWith('antigravity')
   function initialRecords(key, defaults) {
     const records = initCtx[key] || []
@@ -505,7 +506,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
   const msgRecords = []
   const memRecords = initialRecords('mem', defaultInjectedContext)
 
-  const sumTokEst = list => list.reduce((acc, r) => acc + (r.tokEst || 600), 0)
+  const sumTokEst = list => list.reduce((acc, r) => acc + (r.tokEst ?? (observedOnly ? 0 : 600)), 0)
   const sysTokens = sumTokEst(sysRecords)
   let schemaTokens = sumTokEst(schemaRecords)
   let userTokens = 0
@@ -535,7 +536,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
     let dUser = userTokens
     let dMsg = msgTokens
     let dTool = toolTokens
-    if (lastRealTotal > 0) {
+    if (lastRealTotal > 0 && !observedOnly) {
       const target = lastRealTotal + uncalibratedDelta
       const fixed = dSys + dSchema + dMem + dSkill
       const dyn = dUser + dMsg + dTool
@@ -556,6 +557,11 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
       }
     }
     return { sys: dSys, schema: dSchema, user: dUser, mem: dMem, skill: dSkill, msg: dMsg, tool: dTool }
+  }
+
+  function reportedBuckets(disp, recorded) {
+    if (!observedOnly) return disp
+    return Object.fromEntries(Object.keys(disp).map(key => [key, recorded?.[key] ?? null]))
   }
 
   const assembleCategoryList = (stepIdx, countsBefore, toksBefore, disp) => {
@@ -582,10 +588,10 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
         color,
         itemCount: records.length,
         count: t('itemCount', { n: records.length }),
-        tok: `≈${(curTok / 1000).toFixed(1)}k`,
-        pct: `${kindPct(curTok)}%`,
+        tok: curTok == null ? t('notRecorded') : `≈${(curTok / 1000).toFixed(1)}k`,
+        pct: observedOnly || curTok == null ? '' : `${kindPct(curTok)}%`,
         delta: stepIdx >= 0 ? fmtCountDelta(records.length, prevCount) : '',
-        tokDelta: stepIdx >= 0 ? fmtTokDelta(curTok, prevTok) : '',
+        tokDelta: stepIdx >= 0 && !observedOnly ? fmtTokDelta(curTok, prevTok) : '',
         itemIds,
         newIds,
         items: itemIds.map(rid => ({ ...contextRecords[rid], isNew: newSet.has(rid) })),
@@ -604,9 +610,15 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
 
   let prevDisp = computeDisplayBuckets()
   const initTotal = prevDisp.sys + prevDisp.schema + prevDisp.user + prevDisp.mem + prevDisp.skill + prevDisp.msg + prevDisp.tool
-  const initCap = Math.max(windowSpec.tokens, Math.ceil(initTotal * 1.25))
-  const initCapPct = val => (val <= 0 ? 0 : Number((Math.max(0.4, (val / initCap) * 100)).toFixed(2)))
+  let observedUsage = initCtx.estimatedTokens ?? null
+  const openingTokens = observedOnly ? observedUsage : initTotal
+  const initCap = observedOnly ? windowSpec.tokens : Math.max(windowSpec.tokens, Math.ceil(initTotal * 1.25))
+  const initCapPct = val => (!initCap || val <= 0 ? 0 : Number((Math.max(0.4, (val / initCap) * 100)).toFixed(2)))
   const initKindPct = val => Math.round((val / Math.max(1, initTotal)) * 100)
+  const openingByKind = Object.fromEntries(Object.entries(initCtx)
+    .filter(([, records]) => Array.isArray(records) && records.some(record => record.tokEst != null))
+    .map(([key, records]) => [key, sumTokEst(records)]))
+  const initialBuckets = reportedBuckets(prevDisp, openingByKind)
   const zeroCounts = {
     sys: sysRecords.length,
     schema: schemaRecords.length,
@@ -617,12 +629,13 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
     tool: 0,
   }
   const initialSnapshot = {
-    pct: Number(Math.min(99, (initTotal / initCap) * 100).toFixed(1)),
+    pct: initCap && openingTokens != null ? Number(((openingTokens / initCap) * 100).toFixed(1)) : null,
     windowTokens: windowSpec.tokens,
     windowLabel: windowSpec.label,
-    totalTokens: initTotal,
+    totalTokens: openingTokens,
+    ...(observedOnly && openingTokens != null && { estimated: true }),
     deltaTokens: 0,
-    segments: {
+    segments: observedOnly ? { used: initCap && openingTokens != null ? Math.min(openingTokens / initCap * 100, 100) : 0 } : {
       sys: initCapPct(prevDisp.sys),
       schema: initCapPct(prevDisp.schema),
       user: 0,
@@ -631,7 +644,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
       msg: 0,
       tool: 0,
     },
-    pctByKind: {
+    pctByKind: observedOnly ? {} : {
       sys: initKindPct(prevDisp.sys),
       schema: initKindPct(prevDisp.schema),
       user: 0,
@@ -640,8 +653,8 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
       msg: 0,
       tool: 0,
     },
-    tokensByKind: { ...prevDisp },
-    categories: assembleCategoryList(-1, zeroCounts, prevDisp, prevDisp),
+    tokensByKind: initialBuckets,
+    categories: assembleCategoryList(-1, zeroCounts, prevDisp, initialBuckets),
   }
 
   const steps = rawGroups.map((group, index) => {
@@ -697,7 +710,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
         payload: String(first.text || ''),
         ...(first.images?.length ? { images: first.images } : {}),
       }))
-      for (const skill of extractSkillNames(first, knownSkillNames)) {
+      for (const skill of observedOnly ? [] : extractSkillNames(first, knownSkillNames)) {
         if (!allSkills.includes(skill)) {
           allSkills.push(skill)
           const skTok = 1800
@@ -725,59 +738,68 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
     } else if (group.groupType === 'compact') {
       compactSeq++
       const cItem = first
-      const preTokens = cItem.preTokens || prevTotal
-      const archivedTools = toolRecords.length
-      const postTokens = cItem.postTokens || Math.min(preTokens, Math.max(24000, Math.round(preTokens * 0.28)))
-      const droppedTokens = cItem.droppedTokens || Math.max(0, preTokens - postTokens)
-      const summaryText = String(cItem.text || cItem.summary || 'Context Compaction Summary').trim()
-      const sumTok = Math.max(1200, Math.round(summaryText.length * 0.35))
-      const docId = `compact-doc-${index}`
-      const recId = `compact-summary-${compactSeq}`
+      if (observedOnly) {
+        compactInfo = { seq: compactSeq, title: t('compactTitle', { seq: compactSeq }) }
+        if (cItem.text) {
+          compactInfo.content = cItem.text
+          compactInfo.docId = `compact-doc-${index}`
+          memRecords.push(registerRecord({ id: `compact-summary-${compactSeq}`, tag: 'Checkpoint',
+            title: compactInfo.title, payload: cItem.text, stepIndex: index }))
+        }
+      } else {
+        const preTokens = cItem.preTokens || prevTotal
+        const archivedTools = toolRecords.length
+        const postTokens = cItem.postTokens || Math.min(preTokens, Math.max(24000, Math.round(preTokens * 0.28)))
+        const droppedTokens = cItem.droppedTokens || Math.max(0, preTokens - postTokens)
+        const summaryText = String(cItem.text || cItem.summary || 'Context Compaction Summary').trim()
+        const sumTok = Math.max(1200, Math.round(summaryText.length * 0.35))
+        const docId = `compact-doc-${index}`
+        const recId = `compact-summary-${compactSeq}`
 
-      toolRecords = []
-      toolTokens = 0
-      userTokens = Math.round(userTokens * 0.35)
-      msgTokens = Math.round(msgTokens * 0.25)
-      memTokens += sumTok
-      lastRealTotal = postTokens
-      uncalibratedDelta = 0
-      const rawFixed = sysTokens + schemaTokens + memTokens + skillTokens
-      if (postTokens > 0 && rawFixed > postTokens * 0.85) {
-        mountScale = (postTokens * 0.72) / rawFixed
+        toolRecords = []
+        toolTokens = 0
+        userTokens = Math.round(userTokens * 0.35)
+        msgTokens = Math.round(msgTokens * 0.25)
+        memTokens += sumTok
+        lastRealTotal = postTokens
+        uncalibratedDelta = 0
+        const rawFixed = sysTokens + schemaTokens + memTokens + skillTokens
+        if (postTokens > 0 && rawFixed > postTokens * 0.85) {
+          mountScale = (postTokens * 0.72) / rawFixed
+        }
+
+        memRecords.push(registerRecord({
+          id: recId,
+          stepIndex: index,
+          tokEst: sumTok,
+          tag: 'Compact',
+          title: `${t('compactTitle', { seq: cItem.seq || compactSeq })} (${(preTokens / 1000).toFixed(1)}k → ${(postTokens / 1000).toFixed(1)}k)`,
+          meta: `-${(droppedTokens / 1000).toFixed(1)}k tok · ${stepTime}s`,
+          payload: summaryText,
+        }))
+
+        compactInfo = {
+          seq: cItem.seq || compactSeq,
+          trigger: cItem.trigger || 'auto',
+          preTokens,
+          postTokens,
+          droppedTokens,
+          archivedTools,
+          docId,
+          recId,
+          title: cItem.summary || t('compactTitle', { seq: cItem.seq || compactSeq }),
+          content: summaryText,
+        }
+        inBrief = `${(preTokens / 1000).toFixed(1)}k → ${(postTokens / 1000).toFixed(1)}k`
+        responseBrief = t('archivedTools', { n: archivedTools, tokens: (droppedTokens / 1000).toFixed(1) })
       }
-
-      memRecords.push(registerRecord({
-        id: recId,
-        stepIndex: index,
-        tokEst: sumTok,
-        tag: 'Compact',
-        title: `${t('compactTitle', { seq: cItem.seq || compactSeq })} (${(preTokens / 1000).toFixed(1)}k → ${(postTokens / 1000).toFixed(1)}k)`,
-        meta: `-${(droppedTokens / 1000).toFixed(1)}k tok · ${stepTime}s`,
-        payload: summaryText,
-      }))
-
-      compactInfo = {
-        seq: cItem.seq || compactSeq,
-        trigger: cItem.trigger || 'auto',
-        preTokens,
-        postTokens,
-        droppedTokens,
-        archivedTools,
-        docId,
-        recId,
-        title: cItem.summary || t('compactTitle', { seq: cItem.seq || compactSeq }),
-        content: summaryText,
-      }
-
       kind = 'compact'
       primaryCat = 'mem'
       speedLabel = '0.8×'
       dwellMs = 2100
       spotlight = 'context-compact'
       detailTitle = t('compactTitle', { seq: compactInfo.seq })
-      detailSnippet = summaryText.slice(0, 260)
-      inBrief = `${(preTokens / 1000).toFixed(1)}k → ${(postTokens / 1000).toFixed(1)}k`
-      responseBrief = t('archivedTools', { n: archivedTools, tokens: (droppedTokens / 1000).toFixed(1) })
+      detailSnippet = (compactInfo.content || '').slice(0, 260)
     } else if (group.groupType === 'assistant') {
       msgSeq++
       const cleanReply = (first.text || '').replace(/\s+/g, ' ').trim()
@@ -818,7 +840,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
       allTools.push(...extracted.tools)
       allChanges.push(...extracted.changes)
 
-      for (const memName of extracted.memories) {
+      for (const memName of observedOnly ? [] : extracted.memories) {
         if (!allMemories.includes(memName)) {
           allMemories.push(memName)
           const memTok = 1100
@@ -855,14 +877,14 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
 
       const rawMontage = []
       for (const item of toolItems) {
-        const dynSchema = resolveDynamicSchema(item, index, schemaIdSet)
+        const dynSchema = !observedOnly && resolveDynamicSchema(item, index, schemaIdSet)
         if (dynSchema) {
           schemaIdSet.add(dynSchema.id)
           schemaTokens += dynSchema.tokEst
           stepEstimatedDelta += dynSchema.tokEst
           schemaRecords.push(registerRecord(dynSchema))
         }
-        for (const skill of extractSkillNames(item, knownSkillNames)) {
+        for (const skill of observedOnly ? [] : extractSkillNames(item, knownSkillNames)) {
           if (!allSkills.includes(skill)) {
             allSkills.push(skill)
             const skTok = 1800
@@ -997,13 +1019,23 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
 
     const disp = computeDisplayBuckets()
     prevDisp = disp
-    const totalTokens = disp.sys + disp.schema + disp.user + disp.mem + disp.msg + disp.tool + disp.skill
-    const deltaTokens = totalTokens - prevTotal
-    const capacity = Math.max(windowSpec.tokens, Math.ceil(totalTokens * 1.25))
-    const pct = Number(Math.min(99, (totalTokens / capacity) * 100).toFixed(1))
-    const capPct = value => (value <= 0 ? 0 : Number((Math.max(0.4, (value / capacity) * 100)).toFixed(2)))
-    const kindPct = value => Math.round((value / Math.max(1, totalTokens)) * 100)
-    const categories = assembleCategoryList(index, prevCounts, prevToks, disp)
+    const bucketTotal = disp.sys + disp.schema + disp.user + disp.mem + disp.msg + disp.tool + disp.skill
+    const previousUsage = observedOnly ? observedUsage : prevTotal
+    const request = observedOnly && group.items.findLast(item => item.contextTokens != null || item.contextTokenEstimates || item.contextWindow != null)
+    const sample = request?.contextTokens
+    if (observedOnly) {
+      const limit = group.items.findLast(item => item.contextWindow != null)?.contextWindow
+      if (limit != null) windowSpec = resolveWindowCapacity(sessionTool, sessionModel, limit)
+      observedUsage = sample ?? null
+    }
+    const totalTokens = observedOnly ? observedUsage : bucketTotal
+    const deltaTokens = totalTokens == null || previousUsage == null ? null : totalTokens - previousUsage
+    const capacity = observedOnly ? windowSpec.tokens : Math.max(windowSpec.tokens, Math.ceil(totalTokens * 1.25))
+    const pct = capacity && totalTokens != null ? Number(((totalTokens / capacity) * 100).toFixed(1)) : null
+    const capPct = value => (!capacity || value <= 0 ? 0 : Number((Math.max(0.4, (value / capacity) * 100)).toFixed(2)))
+    const kindPct = value => Math.round((value / Math.max(1, bucketTotal)) * 100)
+    const buckets = reportedBuckets(disp, request?.contextTokenEstimates)
+    const categories = assembleCategoryList(index, prevCounts, prevToks, buckets)
 
     return {
       index,
@@ -1029,8 +1061,9 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
         windowTokens: windowSpec.tokens,
         windowLabel: windowSpec.label,
         totalTokens,
+        ...(observedOnly && totalTokens != null && { estimated: false }),
         deltaTokens,
-        segments: {
+        segments: observedOnly ? { used: Math.min(pct ?? 0, 100) } : {
           sys: capPct(disp.sys),
           schema: capPct(disp.schema),
           user: capPct(disp.user),
@@ -1039,7 +1072,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
           skill: capPct(disp.skill),
           mem: capPct(disp.mem),
         },
-        pctByKind: {
+        pctByKind: observedOnly ? {} : {
           sys: kindPct(disp.sys),
           schema: kindPct(disp.schema),
           user: kindPct(disp.user),
@@ -1048,15 +1081,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
           skill: kindPct(disp.skill),
           mem: kindPct(disp.mem),
         },
-        tokensByKind: {
-          sys: disp.sys,
-          schema: disp.schema,
-          user: disp.user,
-          msg: disp.msg,
-          tool: disp.tool,
-          skill: disp.skill,
-          mem: disp.mem,
-        },
+        tokensByKind: buckets,
         chips: {
           tools: uniqueRecent(allTools, 6),
           skills: uniqueRecent(allSkills, 4),

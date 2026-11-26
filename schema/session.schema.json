@@ -51,12 +51,13 @@
     "contextWindow": {
       "type": "integer",
       "minimum": 1,
-      "description": "Context window token capacity (e.g. 200000 or 1000000)."
+      "description": "Initial context window capacity in tokens. A request can override it when the limit changes."
     },
     "initialContext": {
       "type": "object",
       "description": "Initial mounted context records captured from the session preamble.",
       "properties": {
+        "estimatedTokens": { "type": "integer", "minimum": 0, "description": "Estimated tokens loaded before user input, from a recorded baseline breakdown." },
         "sys": {
           "type": "array",
           "items": { "$ref": "#/$defs/contextRecord" }
@@ -234,6 +235,13 @@
         "agent": { "type": "string" },
         "question": { "type": "boolean" },
         "answer": { "type": "boolean" },
+        "contextWindow": { "type": "integer", "minimum": 0, "description": "Window capacity for this request if it varies within the session. Zero marks an unknown capacity." },
+        "contextTokenEstimates": {
+          "type": "object",
+          "description": "Category estimates recorded for this model request.",
+          "propertyNames": { "enum": ["sys", "schema", "mem", "skill"] },
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
         "contextTokens": { "type": "integer", "minimum": 0 },
         "images": {
           "type": "array",

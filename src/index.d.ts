@@ -13,6 +13,7 @@ export interface ContextRecord {
 }
 
 export interface InitialContext {
+  estimatedTokens?: number
   sys?: ContextRecord[]
   schema?: ContextRecord[]
   mem?: ContextRecord[]
@@ -66,6 +67,8 @@ export interface SessionItem {
   agent?: string
   question?: boolean
   answer?: boolean
+  contextWindow?: number
+  contextTokenEstimates?: Partial<Record<'sys' | 'schema' | 'mem' | 'skill', number>>
   contextTokens?: number
   images?: string[]
   omittedImages?: number

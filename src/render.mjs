@@ -243,9 +243,19 @@ function renderBrowserCategories(categories = [], t) {
   }).join('')
 }
 
+export function contextUsageLabel(snapshot, t, opening = false) {
+  if (snapshot.totalTokens == null) return t(opening ? 'initialUsageMissing' : 'usageMissing')
+  if (snapshot.estimated != null) return (snapshot.estimated ? '≈' : '') + snapshot.totalTokens.toLocaleString(t.lang)
+  return (snapshot.totalTokens / 1000).toFixed(1) + 'k'
+}
+
+export function categoryUsageLabel(value, t) {
+  return value == null ? t('notRecorded') : `≈${(value / 1000).toFixed(1)}k`
+}
+
 function contextSidebar(line, t) {
   const initial = line.initialSnapshot
-  const tok = n => `≈${(Number(n || 0) / 1000).toFixed(1)}k`
+  const tok = n => categoryUsageLabel(n, t)
   return `<aside class="session-context-aside" aria-label="${escape(t('activeContext'))}" data-session-aside>
     <section class="sp-aside-sec" aria-label="${escape(t('activeContext'))}">
       <div class="sp-sec-head">
@@ -253,22 +263,13 @@ function contextSidebar(line, t) {
         <span class="sp-sec-snap" data-context-snap>${escape(t('snapInitial'))}</span>
       </div>
       <div class="lc-overview-num">
-        <b data-context-tot>${escape((initial.totalTokens / 1000).toFixed(1))}k</b>
-        <span>/ <span data-context-win>${escape(initial.windowLabel || '1.0M')}</span> tokens</span>
-        <span class="lc-overview-pct"><b data-context-pct>${escape(String(initial.pct))}%</b>${escape(t('usedSuffix'))}</span>
+        <b data-context-tot>${escape(contextUsageLabel(initial, t, true))}</b>
+        <span>/ <span data-context-win>${escape(initial.windowLabel || t('unknownCapacity'))}</span><span data-capacity-unit${initial.windowLabel ? '' : ' hidden'}> tokens</span></span>
+        <span class="lc-overview-pct"${initial.pct == null ? ' hidden' : ''}><b data-context-pct>${initial.pct == null ? '' : initial.pct + '%'}</b>${escape(t('usedSuffix'))}</span>
       </div>
-      <div class="lc-stacked" data-stacked-bar>
-        <div class="lc-stacked-seg is-sys" data-seg="sys" data-cat-key="sys" style="width:${initial.segments.sys}%"></div>
-        <div class="lc-stacked-seg is-schema" data-seg="schema" data-cat-key="schema" style="width:${initial.segments.schema}%"></div>
-        <div class="lc-stacked-seg is-user" data-seg="user" data-cat-key="user" style="width:${initial.segments.user}%"></div>
-        <div class="lc-stacked-seg is-mem" data-seg="mem" data-cat-key="mem" style="width:${initial.segments.mem}%"></div>
-        <div class="lc-stacked-seg is-skill" data-seg="skill" data-cat-key="skill" style="width:${initial.segments.skill}%"></div>
-        <div class="lc-stacked-seg is-msg" data-seg="msg" data-cat-key="msg" style="width:${initial.segments.msg}%"></div>
-        <div class="lc-stacked-seg is-tool" data-seg="tool" data-cat-key="tool" style="width:${initial.segments.tool}%"></div>
+      <div class="lc-stacked" data-stacked-bar${initial.pct == null ? ' hidden' : ''}>
+        ${Object.entries(initial.segments).map(([key, width]) => `<div class="lc-stacked-seg is-${escape(key)}" data-seg="${escape(key)}"${key === 'used' ? '' : ` data-cat-key="${escape(key)}"`} style="width:${Number(width)}%"></div>`).join('')}
         <div class="lc-stacked-free" title="${escape(t('freeSpaceTitle'))}"></div>
-        <div class="lc-trigger" style="left:80%" title="${escape(t('autoCompactTriggerTitle'))}"></div>
-        <div class="lc-reserve lc-reserve-headroom" style="left:80%;width:12%" title="${escape(t('headroomTitle'))}"></div>
-        <div class="lc-reserve lc-reserve-output" style="left:92%;width:8%" title="${escape(t('outputReserveTitle'))}"></div>
       </div>
       <div class="lc-legend" data-lc-legend>
         <span class="lc-chip" data-cat-key="sys"><i class="session-cat-dot is-sys"></i><span class="lc-chip-label">${escape(t('legendSys'))}</span><span class="lc-chip-nums" data-pro-tok="sys">${escape(tok(initial.tokensByKind.sys))}</span></span>
@@ -419,9 +420,10 @@ function renderLog(session, line, { t, baseUrl = '' }) {
       const postK = ci.postTokens ? `${(ci.postTokens / 1000).toFixed(1)}k` : ''
       const dropK = ci.droppedTokens ? `${(ci.droppedTokens / 1000).toFixed(1)}k` : ''
       const tpl = ci.docId && ci.content ? `<template data-doc-html="${escape(ci.docId)}">${render(ci.content)}</template>` : ''
-      const badgeText = ci.trigger === 'manual' ? t('compactManual') : ci.trigger === 'handoff' ? t('compactHandoff') : t('compactAuto')
+      const badgeText = !ci.trigger ? '' : ci.trigger === 'manual' ? t('compactManual') : ci.trigger === 'handoff' ? t('compactHandoff') : t('compactAuto')
+      const eventTime = item.time ? `<time datetime="${escape(item.time)}">${escape(wallClock(item.time, 0, true))}</time>` : ''
       const freedText = dropK ? t('compactFreed', { tokens: dropK }) : ''
-      entries.push(`${stamp(item.t, stepIndex - 1)}<li class="session-entry session-compact" data-step="${stepIndex - 1}" data-echo-cat="tool" data-kind="compact" data-t="${item.t}"><div class="session-compact-card"><span class="session-compact-icon" aria-hidden="true">🗜</span><div class="session-compact-main"><div class="session-compact-head"><b>${escape(t('compactTitle', { seq: ci.seq || 1 }))}</b><span class="session-compact-tag">${escape(badgeText)}</span>${preK && postK ? `<span class="session-compact-meter">${escape(preK)} → ${escape(postK)}${escape(freedText)}</span>` : ''}</div><p class="session-compact-desc">${escape(t('compactDesc', { count: ci.archivedTools || 0 }))}</p></div>${ci.docId ? `<button type="button" class="session-compact-btn" data-doc-open="${escape(ci.docId)}" data-doc-title="${escape(ci.title || t('compactModalTitle'))}">${escape(t('compactViewBtn'))}</button>${tpl}` : ''}</div></li>`)
+      entries.push(`${stamp(item.t, stepIndex - 1)}<li class="session-entry session-compact" data-step="${stepIndex - 1}" data-echo-cat="tool" data-kind="compact" data-t="${item.t}"><div class="session-compact-card"><span class="session-compact-icon" aria-hidden="true">🗜</span><div class="session-compact-main"><div class="session-compact-head"><b>${escape(t('compactTitle', { seq: ci.seq || 1 }))}</b>${eventTime}${badgeText ? `<span class="session-compact-tag">${escape(badgeText)}</span>` : ''}${preK && postK ? `<span class="session-compact-meter">${escape(preK)} → ${escape(postK)}${escape(freedText)}</span>` : ''}</div>${ci.archivedTools != null ? `<p class="session-compact-desc">${escape(t('compactDesc', { count: ci.archivedTools }))}</p>` : ''}</div>${ci.docId ? `<button type="button" class="session-compact-btn" data-doc-open="${escape(ci.docId)}" data-doc-title="${escape(ci.title || t('compactModalTitle'))}">${escape(t('compactViewBtn'))}</button>${tpl}` : ''}</div></li>`)
     } else {
       entries.push(`${stamp(item.t, stepIndex - 1)}<li class="session-entry session-ai" data-step="${stepIndex - 1}" data-echo-cat="msg" data-kind="reply" data-t="${item.t}"><div class="session-bubble">${item.question ? `<span class="session-who">${escape(t('asksYou', { tool }))}</span>` : ''}<div class="session-ai-body">${render(item.text)}</div>${renderStepArtifacts(stepMeta, { renderMd: render, t, baseUrl })}</div></li>`)
     }
