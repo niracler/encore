@@ -4,6 +4,8 @@ All notable changes to `@niracler/encore` will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-26
+
 ### Fixed
 - Antigravity replays use recorded context window limits and distinguish missing initial usage from zero. Native sessions can show the opening system prompt, tool schemas and system-side token estimates.
 - The timeline marks completed Antigravity checkpoints at their recorded times. The context meter no longer draws a fixed 80% auto-compaction threshold.
@@ -60,7 +62,8 @@ All notable changes to `@niracler/encore` will be documented in this file.
 - Live 7-bucket Context Window inspector, compaction handoff boundaries, sub-agent report modals, WebP frame extraction, and automatic privacy redaction.
 - Bilingual (`zh` / `en`) UI and companion curation skill (`skills/encore/SKILL.md`).
 
-[Unreleased]: https://github.com/niracler/encore/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/niracler/encore/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/niracler/encore/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/niracler/encore/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/niracler/encore/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/niracler/encore/compare/v0.1.0...v0.2.0
