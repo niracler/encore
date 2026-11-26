@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import test from 'node:test'
 import { pathToFileURL } from 'node:url'
 import sharp from 'sharp'
-import { buildReplay, timeline } from '../src/index.mjs'
+import { buildReplay, renderPlayerWidget, timeline } from '../src/index.mjs'
 import { createSessionCatalog } from '../src/detect.mjs'
 import { pickSession } from '../src/session-picker.mjs'
 
@@ -167,4 +167,136 @@ test('native App metadata supplies the title, last activity and archive flag', {
   const matches = []
   for await (const item of list({ query: 'design' })) matches.push([item.preview, !!item.archived])
   assert.deepEqual(matches, [['Archived design', true], ['Active design', false]])
+})
+
+test('unmetered Antigravity usage and capacity stay unknown until a recorded sample', () => {
+  const session = { tool: 'antigravity-cli', model: 'Claude', items: [
+    { type: 'user', text: 'Hello' }, { type: 'assistant', text: 'Hi', contextTokens: 16471 },
+  ] }
+  const line = timeline(session)
+  assert.equal(line.initialSnapshot.totalTokens, null)
+  assert.equal(line.steps[0].contextSnapshot.totalTokens, null)
+  assert.equal(line.steps[1].contextSnapshot.totalTokens, 16471)
+  for (const snap of [line.initialSnapshot, ...line.steps.map(step => step.contextSnapshot)]) {
+    assert.equal(snap.windowTokens, null)
+    assert.equal(snap.pct, null)
+  }
+  const html = renderPlayerWidget(session, line, { lang: 'zh' })
+  assert.match(html, /data-context-tot>初始用量未记录</)
+  assert.match(html, /data-context-win>上限未知</)
+  assert.match(html, /class="lc-overview-pct" hidden/)
+  assert.match(html, /data-stacked-bar hidden/)
+  assert.doesNotMatch(html, /null%|NaN%/)
+  const measured = timeline({ ...session, contextWindow: 512000, initialContext: { estimatedTokens: 0 } })
+  assert.equal(measured.initialSnapshot.totalTokens, 0)
+  assert.equal(measured.initialSnapshot.pct, 0)
+  assert.equal(measured.steps[1].contextSnapshot.pct, 3.2)
+})
+
+test('long titles leave the file size visible in All, agent tabs and archived search results', async () => {
+  const input = Object.assign(new EventEmitter(), { setRawMode() {}, pause() {} })
+  let screen = ''
+  const output = { columns: 75, rows: 12, write(text) { if (text.includes('\n')) screen = text } }
+  async function* list({ query }) {
+    yield { toolLabel: 'Antigravity CLI', timeLabel: '2026-11-26 12:00', sizeKB: 4132,
+      preview: '很长的标题'.repeat(50), archived: query !== undefined }
+  }
+  const picker = pickSession({ lang: 'zh', input, output, list })
+  const repaint = () => new Promise(resolve => setImmediate(resolve))
+  try {
+    await repaint()
+    assert.match(screen, /4132 KB/)
+    input.emit('keypress', '\t', { name: 'tab', shift: true })
+    await repaint()
+    assert.match(screen, /\[Antigravity\]/)
+    assert.match(screen, /4132 KB/)
+    input.emit('keypress', '/', { name: '/' })
+    await repaint()
+    assert.match(screen, /已归档/)
+    assert.match(screen, /4132 KB/)
+    assert.match(screen, /标题|很长/)
+  } finally {
+    input.emit('keypress', '', { name: 'c', ctrl: true })
+    await picker
+  }
+})
+
+test('the native first request restores mounted context without counting the user or later tools', { skip: !process.getBuiltinModule?.('node:sqlite') }, async t => {
+  const { default: protobuf } = await import('protobufjs')
+  const { DatabaseSync } = process.getBuiltinModule('node:sqlite')
+  const { readAntigravityContext } = await import('../src/antigravity-context.mjs')
+  const { fileURLToPath } = await import('node:url')
+  const generation = protobuf.loadSync(fileURLToPath(new URL('../src/antigravity-context.proto', import.meta.url))).lookupType('CortexStepGeneratorMetadata')
+  const root = sandbox(t)
+  const native = { id: 'fixture', root: join(root, 'brain', 'fixture') }
+  mkdirSync(join(root, 'conversations'))
+  const db = new DatabaseSync(join(root, 'conversations', 'fixture.db'))
+  db.exec('CREATE TABLE gen_metadata(idx INTEGER PRIMARY KEY, data BLOB)')
+  const insert = db.prepare('INSERT INTO gen_metadata VALUES (?,?)')
+  function batch(idx, stepIndex, limit, tools, groups) {
+    insert.run(idx, generation.encode({ stepIndices: [stepIndex], chatModel: {
+      promptSections: [{ title: 'identity', content: 'Recorded system instruction', tokenType: 1 }, { title: 'user_rules', content: 'private rules', tokenType: 3 }],
+      tools: tools.map(name => ({ name, description: 'Read a local file', jsonSchemaString: '{"type":"object"}' })),
+      chatStartMetadata: { contextWindowMetadata: { maxContextTokens: limit, tokenBreakdown: { totalTokens: 900, groups } } },
+    } }).finish())
+  }
+  const groups = [
+    { name: 'System Prompt', type: 1, source: 1, numTokens: 380, children: [{ name: 'identity', numTokens: 380 }] },
+    { name: 'Tools', type: 2, source: 1, numTokens: 200, children: [{ name: 'read_file', numTokens: 200 }] },
+    { name: 'Rules', type: 3, source: 1, numTokens: 20, children: [{ name: 'user_rules', numTokens: 20 }] },
+    { name: 'Chat Messages', type: 7, numTokens: 300 },
+  ]
+  batch(0, 1, 512000, ['read_file'], groups)
+  batch(1, 3, 256000, ['new_tool'], groups)
+  insert.run(2, Buffer.from([0x0a, 0x7f]))
+  db.close()
+  const rows = [step(0, 'USER_INPUT', {}), step(1, 'PLANNER_RESPONSE', {}), step(3, 'PLANNER_RESPONSE', {})]
+  const { initialContext, contextWindow, windows } = readAntigravityContext(native, rows)
+  assert.equal(contextWindow, 512000)
+  assert.deepEqual([...windows], [[1, 512000], [3, 256000]])
+  assert.equal(initialContext.estimatedTokens, 600)
+  assert.equal(initialContext.sys[0].payload, 'Recorded system instruction')
+  assert.deepEqual(initialContext.schema.map(r => [r.title, r.tokEst]), [['read_file', 200]])
+  assert.match(initialContext.schema[0].payload, /"type":"object"/)
+  assert.doesNotMatch(JSON.stringify(initialContext), /private rules|new_tool/)
+  assert.equal(readAntigravityContext(native, rows, true).initialContext.mem[0].payload, 'private rules')
+  assert.equal(readAntigravityContext(native, rows.slice(-1)).initialContext, undefined)
+  const line = timeline({ tool: 'antigravity-app', initialContext, contextWindow, items: [
+    { type: 'user', text: 'First prompt' }, { type: 'assistant', text: 'A', contextWindow: 512000, contextTokens: 2120 },
+    { type: 'assistant', text: 'B', contextWindow: 256000, contextTokens: 2400 },
+    { type: 'assistant', text: 'Unknown limit', contextWindow: 0, contextTokens: 2500 },
+  ] })
+  assert.equal(line.initialSnapshot.totalTokens, 600)
+  assert.equal(line.initialSnapshot.estimated, true)
+  assert.deepEqual(line.steps.map(s => s.contextSnapshot.windowTokens), [512000, 512000, 256000, null])
+})
+
+test('only completed Antigravity checkpoints mark compaction; unmeasured steps have no invented usage or threshold', async t => {
+  const dir = sandbox(t)
+  const file = join(dir, 'transcript.jsonl')
+  const checkpoint = step(4, 'CHECKPOINT', { source: 'SYSTEM', content: '<summary>Recorded summary</summary>', input_tokens: 999 })
+  log(file, [
+    step(0, 'USER_INPUT', { content: 'Review the file' }),
+    step(1, 'PLANNER_RESPONSE', { content: 'First', input_tokens: 15000 }),
+    step(2, 'CHECKPOINT', { status: 'RUNNING' }),
+    step(3, 'PLANNER_RESPONSE', { content: 'Second', input_tokens: 10000 }),
+    checkpoint, step(5, 'USER_INPUT', { content: 'Continue' }),
+    step(6, 'PLANNER_RESPONSE', { content: 'Third', input_tokens: 5000 }),
+  ])
+  const {session} = await buildReplay(file, {outDir: join(dir,'replay')})
+  const line = timeline(session)
+  const checkpoints = line.steps.filter(s => s.compactInfo)
+  assert.equal(checkpoints.length, 1)
+  assert.equal(session.items.find(item => item.type === 'compact').time, checkpoint.created_at)
+  const [cp] = checkpoints
+  assert.equal(cp.compactInfo.content, 'Recorded summary')
+  assert.equal(cp.compactInfo.trigger, undefined)
+  assert.equal(cp.compactInfo.droppedTokens, undefined)
+  assert.equal(cp.contextSnapshot.totalTokens, null)
+  assert.equal(line.steps[cp.index + 1].contextSnapshot.totalTokens, null)
+  assert.equal(line.steps.at(-1).contextSnapshot.totalTokens, 5000)
+  const html = renderPlayerWidget(session, line, { lang: 'zh' })
+  assert.match(html, /上下文压缩 #1/)
+  assert.ok(html.includes('datetime="' + checkpoint.created_at + '"'))
+  assert.doesNotMatch(html, /自动压缩|lc-trigger|lc-reserve|已归档前序|释放约/)
 })

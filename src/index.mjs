@@ -67,7 +67,7 @@ export async function importRawSession(files, {
   const records = detectedTool === 'claude-ai' ? JSON.parse(readFileSync(fileList[0], 'utf8')) : await readJsonl(fileList, window)
   const nativeRoot = isAntigravity ? native?.workspaces?.[0] : await nativeSessionRoot(fileList[0], detectedTool, records)
   const sessionData = isAntigravity
-    ? await readAntigravity(records, { file: fileList[0], tool: detectedTool, native, images, assetRoots })
+    ? await readAntigravity(records, { file: fileList[0], tool: detectedTool, native, images, assetRoots, includeMemory })
     : readers[detectedTool](records, { ...window, conversation, includeMemory })
   const raw = cutSession(sessionData, window)
 

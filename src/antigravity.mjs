@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { readAntigravityDatabase, readAntigravityContext } from './antigravity-context.mjs'
 import { fileURLToPath } from 'node:url'
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { readFile, realpath, stat } from 'node:fs/promises'
@@ -29,17 +29,7 @@ export function nativeAntigravityLog(file) {
 // Newer installations index conversation titles, activity, workspaces and App archives in SQLite.
 export function antigravitySummaries(root) {
   const path = join(dirname(root), 'conversation_summaries.db')
-  if (!existsSync(path)) return new Map()
-  let db
-  try {
-    const Database = process.getBuiltinModule?.('node:sqlite')?.DatabaseSync
-    db = Database && new Database(path, { readOnly: true })
-    function query(sql) {
-      if (db) return db.prepare(sql).all()
-      const result = spawnSync('sqlite3', ['-readonly', '-json', path, sql], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
-      if (result.error || result.status !== 0) throw result.error || new Error(result.stderr)
-      return JSON.parse(result.stdout || '[]')
-    }
+  return readAntigravityDatabase(path, query => {
     const summaries = query('SELECT conversation_id, title, last_modified_time, workspace_uris FROM conversation_summaries')
     const hasSearch = query("SELECT 1 FROM sqlite_master WHERE name = 'conversations_fts'").length
     const archived = new Set(hasSearch ? query("SELECT DISTINCT conversation_id FROM conversations_fts WHERE archived IN (1, '1')").map(r => r.conversation_id) : [])
@@ -49,12 +39,7 @@ export function antigravitySummaries(root) {
       return [row.conversation_id, { title: row.title, workspaces, archived: archived.has(row.conversation_id),
         updated: Date.parse(row.last_modified_time.replace(' ', 'T')) }]
     }))
-  } catch {
-    // The index is optional on older installations. The transcript and annotations remain usable.
-    return new Map()
-  } finally {
-    db?.close()
-  }
+  }) || new Map()
 }
 
 export function antigravityTitle(root, id) {
@@ -103,8 +88,9 @@ function reviewedFiles(name, args, cwd) {
   return []
 }
 
-export async function readAntigravity(records, { file, tool, native, images, assetRoots }) {
+export async function readAntigravity(records, { file, tool, native, images, assetRoots, includeMemory }) {
   const transcript = createTranscript()
+  const metadata = readAntigravityContext(native, records, includeMemory)
   const logDir = dirname(file)
   const defaults = [process.cwd(), ...(native?.workspaces || []).filter(dir => existsSync(dir))]
   const roots = await Promise.all((assetRoots?.length ? assetRoots : defaults).map(dir => realpath(resolve(dir))))
@@ -126,10 +112,16 @@ export async function readAntigravity(records, { file, tool, native, images, ass
     } else if (type === 'PLANNER_RESPONSE') {
       pending = []
       model = record.model || model
-      const contextTokens = (record.input_tokens || 0) + (record.cache_read_tokens || 0)
-      tokens += contextTokens + (record.output_tokens || 0)
-      transcript.reasoning(record.thinking, time)
-      transcript.assistant(content, time, { cwd, ...(contextTokens && { contextTokens }) })
+      const usage = {}
+      if (Number.isInteger(record.input_tokens) || Number.isInteger(record.cache_read_tokens)) {
+        usage.contextTokens = (record.input_tokens || 0) + (record.cache_read_tokens || 0)
+      }
+      const estimates = metadata?.breakdowns.get(step)
+      if (estimates) usage.contextTokenEstimates = estimates
+      if (metadata?.variableWindows) usage.contextWindow = metadata.windows.get(step) || 0
+      tokens += (usage.contextTokens || 0) + (record.output_tokens || 0)
+      transcript.reasoning(record.thinking, time, usage)
+      transcript.assistant(content, time, { cwd, ...usage })
       for (const [i, call] of (record.tool_calls || []).entries()) {
         const id = step + '/' + i
         const args = call.args || {}
@@ -140,8 +132,7 @@ export async function readAntigravity(records, { file, tool, native, images, ass
           ...(args.CommandLine && { command: args.CommandLine }),
           ...(args.Path && { path: args.Path }),
         })
-        const item = transcript.tool(id, { ...details, name }, time)
-        if (contextTokens) item.contextTokens = contextTokens
+        const item = transcript.tool(id, { ...details, name, ...usage }, time)
         const files = reviewedFiles(base, args, cwd)
         if (files.length) item.deliverables = files
         pending.push(id)
@@ -153,10 +144,17 @@ export async function readAntigravity(records, { file, tool, native, images, ass
       const done = content.match(/^Completed At:\s*([^\r\n]+)/m)?.[1] || time
       if (id !== undefined) transcript.result(id, [output, record.error].filter(Boolean).join('\n'), done,
         images ? await loadMedia(record.media, logDir, roots) : [], cwd)
+    } else if (type === 'CHECKPOINT' && record.status === 'DONE' && !record.error) {
+      const summary = content.match(/<summary>([\s\S]*?)<\/summary>/i)?.[1]?.trim()
+      const text = summary && !includeMemory
+        ? summary.replace(/<external_system_instructions>[\s\S]*?(?:<\/external_system_instructions>|$)|========= MEMORY_SUMMARY BEGINS =========[\s\S]*?(?:========= MEMORY_SUMMARY ENDS =========|$)/gi, '[Private context omitted]')
+        : summary
+      transcript.compact(text ? { text } : {}, time)
     } else if (type === 'ERROR_MESSAGE') {
       transcript.assistant(record.error || content, time)
     }
   }
   return transcript.finish({ tool, model, tokens: tokens || undefined,
+    contextWindow: metadata?.contextWindow, initialContext: metadata?.initialContext,
     title: native?.title || (native && antigravityTitle(dirname(native.root), native.id)) })
 }

@@ -93,6 +93,8 @@ npx @niracler/encore@latest play ./my-replay
 
 这些数值用于观察会话中的上下文变化。日志提供统计时使用记录值，缺少的步骤或分类明细按内容长度估算。
 
+对于 Antigravity 本机会话，Encore 从首次模型请求的记录中提取已加载的系统提示词和工具定义。初始用量取自系统侧分类的估算值（标为 `≈`），首条用户消息单独计入对应步骤。日志缺少开场统计时显示「初始用量未记录」，容量缺失时显示「上限未知」。时间线按日志中的事件时间标记压缩检查点。
+
 </details>
 
 [开发与贡献](./AGENTS.md) · [术语表](./GLOSSARY.md) · [npm](https://www.npmjs.com/package/@niracler/encore) · [MIT](./LICENSE)

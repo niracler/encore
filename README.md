@@ -93,6 +93,8 @@ A verified file matches the SHA-256 checksum recorded in the log. An export-time
 
 The counts show how the context changes during a session. Encore uses recorded counts where available and estimates missing step or category counts from content length.
 
+For native Antigravity sessions, Encore reads the recorded system instructions and tool definitions from the first model request. The opening estimate (`≈`) counts system-side groups and excludes the first user message. Missing usage and window limits are labeled separately. Completed checkpoints appear on the timeline at their recorded times.
+
 </details>
 
 [Contributing](./AGENTS.md) · [Glossary](./GLOSSARY.md) · [npm](https://www.npmjs.com/package/@niracler/encore) · [MIT](./LICENSE)

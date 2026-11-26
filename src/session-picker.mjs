@@ -57,7 +57,8 @@ export async function pickSession({ lang, input = process.stdin, output = proces
       const selected = start + i === view.selected
       const source = groups[tab] === 'antigravity' ? row.toolLabel.replace(/^Antigravity /, '') : row.toolLabel
       const archive = row.archived ? (zh ? ' [已归档]' : ' [Archived]') : ''
-      const line = fit((selected ? ' ❯ ' : '   ') + (i + 1) + '. ' + row.timeLabel + ' [' + source + ']' + archive + ' ' + row.preview, cols)
+      const sizeLabel = row.sizeKB == null ? '' : '  ' + row.sizeKB + ' KB'
+      const line = fit((selected ? ' ❯ ' : '   ') + (i + 1) + '. ' + row.timeLabel + ' [' + source + ']' + archive + ' ' + row.preview, cols - sizeLabel.length) + sizeLabel
       lines.push(selected ? '\x1b[1;36m' + line + '\x1b[0m' : line)
     }
     if (!page.length) lines.push(view.done ? (zh ? '没有匹配的会话' : 'No matching sessions') : (zh ? '正在读取会话…' : 'Loading sessions…'))
