@@ -4,6 +4,10 @@ All notable changes to `@niracler/encore` will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Import Antigravity App and CLI sessions with reference images, browser screenshots and files submitted for review.
+- Browse local sessions by Agent and search titles and first prompts across history, including identifiable archived sessions.
+
 ## [0.3.1] - 2026-11-20
 
 ### Changed

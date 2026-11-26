@@ -1,4 +1,4 @@
-export type AgentToolId = 'codex' | 'claude-code' | 'claude-ai' | 'workbuddy' | (string & {})
+export type AgentToolId = 'codex' | 'claude-code' | 'claude-ai' | 'workbuddy' | 'antigravity' | 'antigravity-app' | 'antigravity-cli' | (string & {})
 export type PlayerLang = 'zh' | 'en'
 
 export interface ContextRecord {
@@ -142,6 +142,7 @@ export interface RecentSessionSummary {
   tool: AgentToolId
   toolLabel: string
   file: string
+  archived?: boolean
   mtimeMs: number
   timeLabel: string
   sizeKB: number
@@ -159,6 +160,8 @@ export function scanRecentSessions(options?: {
   limit?: number
   codexDir?: string
   claudeDir?: string
+  antigravityAppDir?: string
+  antigravityCliDir?: string
   workbuddyDir?: string
 }): Promise<RecentSessionSummary[]>
 

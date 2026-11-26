@@ -15,7 +15,9 @@
 npx @niracler/encore@latest
 ```
 
-Requires Node.js 20.10 or later. Choose a recent Codex, Claude Code or WorkBuddy session on your machine to open its replay in your browser. For Claude.ai, pass the path to your exported `conversations.json` to the same command.
+Requires Node.js 20.10 or later. Choose a local Codex, Claude Code, WorkBuddy or Antigravity session to open its replay in your browser. Press `Tab` to switch agents and `/` to search titles and first user messages in the current tab. Search includes identifiable archived sessions. `Esc` restores your previous position.
+
+Antigravity App and CLI share a tab with the source shown on each row. The picker prefers `transcript_full.jsonl` and falls back to `transcript.jsonl`. Passing a path imports exactly that file. The picker reads the Antigravity index using Node’s built-in SQLite or a local `sqlite3` executable. If the index is unavailable, it uses transcripts and title annotations and cannot identify archives recorded only in the index. For Claude.ai, pass the path to your exported `conversations.json` to the same command.
 
 Encore writes to a temporary directory by default. To keep the replay, add `-o ./my-replay` to the command.
 

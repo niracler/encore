@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
+import { antigravitySummaries, nativeAntigravityLog, readAntigravity } from './antigravity.mjs'
 import { readClaudeAi } from './claude-ai.mjs'
 import { prepareAttachmentPreviews } from './attachment-previews.mjs'
 import { collectExternalFiles, nativeSessionRoot } from './external-files.mjs'
@@ -54,14 +55,21 @@ export async function importRawSession(files, {
   assetRoots,
 } = {}) {
   const fileList = [].concat(files).map(f => resolve(f))
-  const detectedTool = tool || (await detectInput(fileList[0])).tool || 'codex'
-  if (!readers[detectedTool]) {
+  let detectedTool = tool || (await detectInput(fileList[0])).tool || 'codex'
+  const isAntigravity = ['antigravity', 'antigravity-app', 'antigravity-cli'].includes(detectedTool)
+  const native = isAntigravity && nativeAntigravityLog(fileList[0])
+  if (native) Object.assign(native, antigravitySummaries(dirname(native.root)).get(native.id))
+  if (isAntigravity) detectedTool = native?.tool || 'antigravity'
+  if (!isAntigravity && !readers[detectedTool]) {
     throw new Error(`Unsupported session format: ${detectedTool}`)
   }
   const window = { from, to }
   const records = detectedTool === 'claude-ai' ? JSON.parse(readFileSync(fileList[0], 'utf8')) : await readJsonl(fileList, window)
-  const nativeRoot = await nativeSessionRoot(fileList[0], detectedTool, records)
-  const raw = cutSession(readers[detectedTool](records, { ...window, conversation, includeMemory }), window)
+  const nativeRoot = isAntigravity ? native?.workspaces?.[0] : await nativeSessionRoot(fileList[0], detectedTool, records)
+  const sessionData = isAntigravity
+    ? await readAntigravity(records, { file: fileList[0], tool: detectedTool, native, images, assetRoots })
+    : readers[detectedTool](records, { ...window, conversation, includeMemory })
+  const raw = cutSession(sessionData, window)
 
   if (title) raw.title = title
   if (description !== undefined) raw.description = description
@@ -86,7 +94,10 @@ export async function importRawSession(files, {
       width: imageWidth,
       lang: resolvedLang,
     })
-    await collectExternalFiles(withImages, targetDir, assetRoots, nativeRoot)
+    const sessionRoots = native && !assetRoots
+      ? [native.root, ...(native.workspaces || []).slice(1).filter(dir => existsSync(dir))]
+      : []
+    await collectExternalFiles(withImages, targetDir, assetRoots, nativeRoot, sessionRoots)
     const redacted = redactSession(withImages)
     const limit = clip ? Number(clip) : undefined
     const session = clipSession(redacted, limit ? { input: limit, output: limit } : undefined)

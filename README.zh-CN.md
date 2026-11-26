@@ -15,7 +15,9 @@
 npx @niracler/encore@latest
 ```
 
-需要 Node.js 20.10 或更高版本。选中本机最近的一段 Codex、Claude Code 或 WorkBuddy 会话，浏览器就会打开回放。要回看 Claude.ai 会话，把导出的 `conversations.json` 路径传给同一条命令即可。
+需要 Node.js 20.10 或更高版本。从「全部」或 Agent 标签中选择一段 Codex、Claude Code、WorkBuddy 或 Antigravity 会话，即可在浏览器中回看。按 `Tab` 切换标签，按 `/` 搜索当前标签下的标题和首条用户消息，按 `Esc` 返回原位置。搜索也会列出能识别的归档会话。
+
+Antigravity App 和 CLI 共用一个标签，每行显示来源。选择器优先使用 `transcript_full.jsonl`，缺少时读取 `transcript.jsonl`。手动传入路径时，Encore 读取指定文件。会话选择器通过 Node.js 内置 SQLite 或本机的 `sqlite3` 读取 Antigravity 索引。索引不可用时，使用本地日志和标题文件，此时无法识别索引中的归档状态。要回看 Claude.ai 会话，把导出的 `conversations.json` 路径传给同一条命令即可。
 
 回放默认写入系统临时目录。想保留下来，可以在命令末尾加上 `-o ./my-replay`。
 
