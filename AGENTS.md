@@ -40,3 +40,17 @@ Encore strictly separates data, browser player, and CLI tooling:
 
 - Use English Conventional Commits (`feat(cli): ...`, `fix(player): ...`, `docs: ...`, `test: ...`).
 - Do not run `git commit`, `git push`, or `pnpm publish` unless explicitly requested by the user.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs are tracked in GitHub Issues (`niracler/encore`) via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Uses the five default triage labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout with root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`.
