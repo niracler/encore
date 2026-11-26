@@ -75,7 +75,7 @@ test('imports exactly the specified Antigravity transcript with portable step me
   for (const [item, who] of [[replay.session.items[0], 'you'], [tools[1], 'ai']]) {
     const frame = replay.session.frames.find(frame => frame.who === who)
     assert.ok(item.images.includes(frame.img))
-    assert.equal((await sharp(join(replay.dir, frame.img)).metadata()).format, 'webp')
+    assert.equal((await sharp(readFileSync(join(replay.dir, frame.img))).metadata()).format, 'webp')
   }
   for (const [item, contents] of [[tools[2], '# Plan\nReview layout.'], [tools[3], '# Finished']]) {
     assert.equal(item.deliverables.length, 1)
