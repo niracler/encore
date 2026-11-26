@@ -4,19 +4,17 @@ All notable changes to `@niracler/encore` will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-26
+
 ### Added
 - Import Antigravity App and CLI sessions with reference images, browser screenshots and files submitted for review.
 - Browse local sessions by Agent and search titles and first prompts across history, including identifiable archived sessions.
-
-## [0.3.1] - 2026-11-20
+- The Japan travel map Replay preserves the CLI-generated title, Frame labels, and event order, with sensitive content masked and both original-sound films available.
 
 ### Changed
 - Clicking a message or moving the timeline pauses the Player at that Step. Playback resumes with the next Step. Image and document previews preserve the current position.
 - The segmented timeline marks Frames, documents, Turns, and Compactions. Labels adapt to the available width. Touch and keyboard navigation use the same playback position.
 - The showcase opens each Replay on its own page with a link back to the case directory. Existing shared links continue to open the same Replay.
-
-### Added
-- The Japan travel map Replay preserves the CLI-generated title, Frame labels, and event order, with sensitive content masked and both original-sound films available.
 
 ## [0.3.0] - 2026-11-20
 
@@ -57,8 +55,8 @@ All notable changes to `@niracler/encore` will be documented in this file.
 - Live 7-bucket Context Window inspector, compaction handoff boundaries, sub-agent report modals, WebP frame extraction, and automatic privacy redaction.
 - Bilingual (`zh` / `en`) UI and companion curation skill (`skills/encore/SKILL.md`).
 
-[Unreleased]: https://github.com/niracler/encore/compare/v0.3.1...HEAD
-[0.3.1]: https://github.com/niracler/encore/compare/v0.3.0...v0.3.1
+[Unreleased]: https://github.com/niracler/encore/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/niracler/encore/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/niracler/encore/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/niracler/encore/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/niracler/encore/releases/tag/v0.1.0
