@@ -12,7 +12,7 @@
     },
     "tool": {
       "type": "string",
-      "enum": ["codex", "claude-code", "claude-ai", "workbuddy"],
+      "enum": ["codex", "claude-code", "claude-ai", "workbuddy", "antigravity", "antigravity-app", "antigravity-cli"],
       "description": "Source AI agent environment identifier."
     },
     "model": {

@@ -1,6 +1,7 @@
 import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
+import { antigravityPrompt, antigravityStores, antigravitySummaries, antigravityTitle, isAntigravityRecord, nativeAntigravityLog } from './antigravity.mjs'
 import { cleanPrompt } from './codex.mjs'
 import { userText } from './claude-code.mjs'
 import { lines, textOf, tools } from './common.mjs'
@@ -37,17 +38,18 @@ export async function detectInput(targetPath) {
 }
 
 export async function detectJsonlTool(filePath) {
-  const stream = createReadStream(filePath, { start: 0, end: 256 * 1024 })
+  const stream = createReadStream(filePath)
   let count = 0
   for await (const line of lines(stream)) {
     const trimmed = line.trim()
     if (!trimmed) continue
     count++
-    if (count === 1 && (trimmed.startsWith('[') || trimmed.includes('"chat_messages"'))) {
+    if (count === 1 && trimmed.startsWith('[')) {
       return 'claude-ai'
     }
     try {
       const rec = JSON.parse(trimmed)
+      if (isAntigravityRecord(rec)) return nativeAntigravityLog(filePath)?.tool || 'antigravity'
       if (rec.type === 'session_meta' || rec.type === 'turn_context' || rec.type === 'response_item' || rec.type === 'event_msg') {
         return 'codex'
       }
@@ -74,7 +76,7 @@ export async function detectJsonlTool(filePath) {
         return 'claude-ai'
       }
     } catch {
-      // Ignore partial line at slice boundary
+      // Skip malformed records while identifying a log.
     }
     if (count >= 40) break
   }
@@ -98,7 +100,7 @@ function walkFiles(dir, matcher, results = [], maxDepth = 5, depth = 0) {
     } else if (entry.isFile() && matcher(entry.name, full)) {
       try {
         const st = statSync(full)
-        if (st.size > 200) {
+        if (st.size > 0) {
           results.push({ file: full, mtimeMs: st.mtimeMs, size: st.size })
         }
       } catch {
@@ -109,26 +111,20 @@ function walkFiles(dir, matcher, results = [], maxDepth = 5, depth = 0) {
   return results
 }
 
-async function summarizeLogFile(file, toolHint) {
-  const stream = createReadStream(file, { start: 0, end: 512 * 1024 })
+async function summarizeLogFile(file, toolHint, knownTitle) {
+  const stream = createReadStream(file)
   let tool = toolHint
-  let title = ''
+  let title = knownTitle || ''
   let firstPrompt = ''
-  let timestamp = ''
-  let lineCount = 0
-
   for await (const line of lines(stream)) {
     const trimmed = line.trim()
     if (!trimmed) continue
-    lineCount++
+
     let rec
     try {
       rec = JSON.parse(trimmed)
     } catch {
       continue
-    }
-    if (!timestamp && rec.timestamp) {
-      timestamp = typeof rec.timestamp === 'number' ? new Date(rec.timestamp).toISOString() : String(rec.timestamp)
     }
     if (rec.type === 'session_meta' || rec.type === 'response_item') tool = 'codex'
     if (rec.providerData || rec.type === 'function_call_result') tool = 'workbuddy'
@@ -137,7 +133,9 @@ async function summarizeLogFile(file, toolHint) {
     if (rec.type === 'summary' && rec.summary && !title) title = rec.summary
 
     if (!firstPrompt) {
-      if (tool === 'codex' && rec.type === 'response_item' && rec.payload?.type === 'message' && rec.payload?.role === 'user') {
+      if (tool.startsWith('antigravity') && rec.type === 'USER_INPUT') {
+        firstPrompt = antigravityPrompt(rec.content) || (rec.media?.length ? '[图片]' : '')
+      } else if (tool === 'codex' && rec.type === 'response_item' && rec.payload?.type === 'message' && rec.payload?.role === 'user') {
         const raw = textOf(rec.payload.content)
           .replace(/^\s*<([a-z][\w-]*context)\b[^>]*>[\s\S]*?<\/\1>\s*/g, '')
           .trim()
@@ -162,15 +160,14 @@ async function summarizeLogFile(file, toolHint) {
         if (txt && txt !== '（中途打断）') firstPrompt = txt
       }
     }
-    if (title && firstPrompt) break
-    if (lineCount > 240 && firstPrompt) break
+    if (firstPrompt && (tool === 'codex' || tool.startsWith('antigravity'))) break
   }
 
-  const rawPreview = (title || firstPrompt || '').replace(/\[(?:附图|图片|附件：[^\]]+)\]/g, '').replace(/\s+/g, ' ').trim()
+  const rawPreview = (title || firstPrompt || '').replace(/\s+/g, ' ').trim()
   return {
     tool,
+    title, firstPrompt,
     preview: rawPreview ? (rawPreview.length > 58 ? `${rawPreview.slice(0, 57)}…` : rawPreview) : '',
-    timestamp,
   }
 }
 
@@ -180,46 +177,94 @@ function formatLocalTime(ms) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-export async function* iterateRecentSessions({
+function antigravityFiles(root, toolHint) {
+  if (!existsSync(root)) return []
+  const files = []
+  const summaries = antigravitySummaries(root)
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const logs = join(root, entry.name, '.system_generated', 'logs')
+    for (const name of ['transcript_full.jsonl', 'transcript.jsonl']) {
+      const file = join(logs, name)
+      const st = statSync(file, { throwIfNoEntry: false })
+      if (!st?.isFile() || !st.size) continue
+      const summary = summaries.get(entry.name)
+      files.push({ file, mtimeMs: summary?.updated || st.mtimeMs, size: st.size, toolHint, id: entry.name, root,
+        title: summary?.title, archived: summary?.archived })
+      break
+    }
+  }
+  return files
+}
+
+function codexTitles(dir) {
+  const index = join(dirname(dir), 'session_index.jsonl')
+  const titles = new Map()
+  if (!existsSync(index)) return titles
+  for (const line of readFileSync(index, 'utf8').split('\n')) {
+    if (!line) continue
+    try {
+      const { id, thread_name } = JSON.parse(line)
+      if (thread_name) titles.set(id, thread_name)
+    } catch { /* A live index can end in an incomplete line. */ }
+  }
+  return titles
+}
+
+export function createSessionCatalog({
   codexDir = join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'sessions'),
   claudeDir = join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'projects'),
   workbuddyDir = join(process.env.WORKBUDDY_HOME || join(homedir(), '.workbuddy'), 'projects'),
-} = {}, maxCandidates = Infinity) {
-  const codexFiles = walkFiles(codexDir, name => name.startsWith('rollout-') && name.endsWith('.jsonl'))
-    .map(item => ({ ...item, toolHint: 'codex' }))
-  const claudeFiles = walkFiles(claudeDir, name => name.endsWith('.jsonl') && !name.startsWith('agent-'))
-    .map(item => ({ ...item, toolHint: 'claude-code' }))
-  const workbuddyFiles = walkFiles(workbuddyDir, name => name.endsWith('.jsonl'))
-    .map(item => ({ ...item, toolHint: 'workbuddy' }))
-
-  const candidates = [...codexFiles, ...claudeFiles, ...workbuddyFiles]
-    .sort((a, b) => b.mtimeMs - a.mtimeMs)
-    .slice(0, maxCandidates)
-
-  for (const cand of candidates) {
-    let info
-    try {
-      info = await summarizeLogFile(cand.file, cand.toolHint)
-    } catch (error) {
-      if (error.code === 'ENOENT') continue
-      throw error
-    }
-    if (!info.preview) continue
-    yield {
-      tool: info.tool,
-      toolLabel: tools[info.tool] || info.tool,
-      file: cand.file,
-      mtimeMs: cand.mtimeMs,
-      timeLabel: formatLocalTime(cand.mtimeMs),
-      sizeKB: Math.max(1, Math.round(cand.size / 1024)),
-      preview: info.preview,
+  antigravityAppDir = antigravityStores()['antigravity-app'],
+  antigravityCliDir = antigravityStores()['antigravity-cli'],
+} = {}) {
+  const rollout = name => name.startsWith('rollout-') && name.endsWith('.jsonl')
+  const index = codexTitles(codexDir)
+  const codex = (dir, archived) => walkFiles(dir, rollout).map(item => ({
+    ...item, toolHint: 'codex', archived,
+    title: index.get(basename(item.file, '.jsonl').slice(-36)),
+  }))
+  const candidates = [
+    ...codex(codexDir, false),
+    ...codex(join(dirname(codexDir), 'archived_sessions'), true),
+    ...walkFiles(claudeDir, name => name.endsWith('.jsonl') && !name.startsWith('agent-')).map(item => ({ ...item, toolHint: 'claude-code' })),
+    ...walkFiles(workbuddyDir, name => name.endsWith('.jsonl')).map(item => ({ ...item, toolHint: 'workbuddy' })),
+    ...antigravityFiles(antigravityAppDir, 'antigravity-app'),
+    ...antigravityFiles(antigravityCliDir, 'antigravity-cli'),
+  ].sort((a, b) => b.mtimeMs - a.mtimeMs)
+  const summaries = new Map()
+  return async function* list({ group, query, signal } = {}) {
+    const term = query?.trim().toLowerCase()
+    for (const cand of candidates) {
+      if (signal?.aborted) return
+      if (cand.archived && query === undefined) continue
+      if (group && group !== (cand.toolHint.startsWith('antigravity') ? 'antigravity' : cand.toolHint)) continue
+      if (!summaries.has(cand.file)) {
+        const title = cand.title || (cand.id && antigravityTitle(cand.root, cand.id))
+        summaries.set(cand.file, summarizeLogFile(cand.file, cand.toolHint, title))
+      }
+      let info
+      try {
+        info = await summaries.get(cand.file)
+      } catch (error) {
+        if (error.code === 'ENOENT') continue
+        throw error
+      }
+      if (!info.preview || (term && ![info.title, info.firstPrompt].some(s => s.toLowerCase().includes(term)))) continue
+      yield {
+        tool: info.tool, toolLabel: tools[info.tool] || info.tool, file: cand.file,
+        mtimeMs: cand.mtimeMs, timeLabel: formatLocalTime(cand.mtimeMs),
+        sizeKB: Math.max(1, Math.round(cand.size / 1024)), preview: info.preview,
+        ...(cand.archived && { archived: true }),
+      }
     }
   }
 }
 
 export async function scanRecentSessions({ limit = 12, ...directories } = {}) {
   const results = []
-  for await (const session of iterateRecentSessions(directories, limit * 3)) {
+  if (limit <= 0) return results
+  for await (const session of createSessionCatalog(directories)()) {
     results.push(session)
     if (results.length >= limit) break
   }

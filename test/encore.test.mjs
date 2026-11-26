@@ -622,6 +622,8 @@ test('buildReplay auto-detects workbuddy logs and scanRecentSessions includes wo
 
     const scanned = await scanRecentSessions({
       codexDir: join(tmp, 'empty-codex'),
+      antigravityAppDir: join(tmp, 'empty-app'),
+      antigravityCliDir: join(tmp, 'empty-cli'),
       claudeDir: join(tmp, 'empty-claude'),
       workbuddyDir: join(tmp, 'workbuddy'),
     })

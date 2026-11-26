@@ -1,13 +1,13 @@
 ---
 name: encore
 description: >
-  Export, curate, and rebuild portable AI Agent replays (Codex, Claude Code, Claude.ai, WorkBuddy) with Encore.
+  Export, curate, and rebuild portable AI Agent replays (Codex, Claude Code, Claude.ai, WorkBuddy, Antigravity App and CLI) with Encore.
   Use when the user asks to export a Raw Log into a Replay, curate `session.json`, select and label `.webp` Frames, review packaged Attachments or Deliverables, write a title and opening description, or redact residual sensitive details before publishing.
 ---
 
 # Encore — Session Replay & Curation Skill
 
-Encore turns a Raw Log from **Codex**, **Claude Code**, **Claude.ai**, or **WorkBuddy** into a portable **Replay** rendered by the standalone **Player** (**Left**: Turns, Tool calls, Sub-agents, Attachments, Deliverables, and Frames; **Right**: live Context Snapshot inspector and Compaction boundaries; **Bottom**: Step timeline).
+Encore turns a Raw Log from **Codex**, **Claude Code**, **Claude.ai**, **WorkBuddy**, or **Antigravity** into a portable **Replay** rendered by the standalone **Player** (**Left**: Turns, Tool calls, Sub-agents, Attachments, Deliverables, and Frames; **Right**: live Context Snapshot inspector and Compaction boundaries; **Bottom**: Step timeline).
 
 While `npx @niracler/encore@latest` builds an immediately playable Replay, this skill guides **Curation** before publishing.
 

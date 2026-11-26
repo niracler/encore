@@ -487,16 +487,23 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
     return entry
   }
 
-  const sysRecords = (initCtx.sys?.length ? initCtx.sys : defaultSystemPrompts(sessionTool)).map(r => registerRecord({ ...r, stepIndex: -1 }))
-  const schemaRecords = (initCtx.schema?.length ? initCtx.schema : defaultToolSchemas(sessionTool)).map(r => registerRecord({ ...r, stepIndex: -1 }))
+  // Antigravity transcripts contain observed steps, with no initial prompt or tool inventory.
+  const observedOnly = sessionTool.startsWith('antigravity')
+  function initialRecords(key, defaults) {
+    const records = initCtx[key] || []
+    const entries = records.length || observedOnly ? records : defaults(sessionTool, sessionStart)
+    return entries.map(record => registerRecord({ ...record, stepIndex: -1 }))
+  }
+  const sysRecords = initialRecords('sys', defaultSystemPrompts)
+  const schemaRecords = initialRecords('schema', defaultToolSchemas)
   const schemaIdSet = new Set(schemaRecords.map(r => r.id))
   for (const r of schemaRecords) if (r.title) schemaIdSet.add(`schema-dyn-${String(r.title).replace(/[^a-zA-Z0-9_-]/g, '_')}`)
   const userRecords = []
   let toolRecords = []
-  const skillRecords = (initCtx.skill?.length ? initCtx.skill : defaultSkillCatalog()).map(r => registerRecord({ ...r, stepIndex: -1 }))
+  const skillRecords = initialRecords('skill', defaultSkillCatalog)
   const knownSkillNames = new Set(skillRecords.map(r => r.title).filter(Boolean))
   const msgRecords = []
-  const memRecords = (initCtx.mem?.length ? initCtx.mem : defaultInjectedContext(sessionTool, sessionStart)).map(r => registerRecord({ ...r, stepIndex: -1 }))
+  const memRecords = initialRecords('mem', defaultInjectedContext)
 
   const sumTokEst = list => list.reduce((acc, r) => acc + (r.tokEst || 600), 0)
   const sysTokens = sumTokEst(sysRecords)
@@ -511,7 +518,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
   let uncalibratedDelta = 0
   const allTools = []
   const allSkills = []
-  const allMemories = ['AGENTS.md']
+  const allMemories = observedOnly ? [] : ['AGENTS.md']
   const allChanges = []
   let latestUserPrompt = ''
   let toolSeq = 0

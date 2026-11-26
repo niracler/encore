@@ -6,6 +6,9 @@ import { binSeconds, describeStats, minutes, sumStats, timeline } from './timeli
 const toolLabels = {
   codex: 'Codex',
   workbuddy: 'WorkBuddy',
+  antigravity: 'Antigravity',
+  'antigravity-app': 'Antigravity App',
+  'antigravity-cli': 'Antigravity CLI',
   'claude-code': 'Claude Code',
   'claude-ai': 'Claude',
 }

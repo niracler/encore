@@ -6,6 +6,9 @@ import { fileReferences, messageReferences } from './external-files.mjs'
 export const tools = {
   codex: 'Codex',
   workbuddy: 'WorkBuddy',
+  antigravity: 'Antigravity',
+  'antigravity-app': 'Antigravity App',
+  'antigravity-cli': 'Antigravity CLI',
   'claude-code': 'Claude Code',
   'claude-ai': 'Claude',
 }
@@ -187,9 +190,9 @@ const toolKinds = {
   Bash: 'command', shell: 'command', exec_command: 'command', execute_command: 'command', run_command: 'command',
   Read: 'read', read_file: 'read', view: 'read', Glob: 'find', Grep: 'find', LS: 'find', list_dir: 'find',
   Write: 'edit', Edit: 'edit', MultiEdit: 'edit', NotebookEdit: 'edit', apply_patch: 'edit',
-  create_file: 'edit', write_file: 'edit', str_replace: 'edit', str_replace_based_edit_tool: 'edit',
+  create_file: 'edit', write_file: 'edit', edit_file: 'edit', str_replace: 'edit', str_replace_based_edit_tool: 'edit',
   Agent: 'agent', Task: 'agent', Skill: 'skill', start_process: 'command', device_bash: 'command',
-  view_image: 'view',
+  view_image: 'view', webview_browser: 'view', search_web: 'search', invoke_subagent: 'agent',
 }
 
 const toolNames = {

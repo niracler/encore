@@ -3,9 +3,11 @@ import { createReadStream, createWriteStream } from 'node:fs'
 import { lstat, mkdir, mkdtemp, open, realpath, rename, rm, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { Transform } from 'node:stream'
+import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
+
+export const recordedText = Symbol('recordedText')
 
 function isLocal(path) {
   return typeof path === 'string' && path && !path.startsWith('#') && !path.startsWith('//')
@@ -50,7 +52,7 @@ export function messageReferences(text) {
 
 const supportedInline = new Set(['.pdf', '.xlsx', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.mp4', '.mov', '.webm', '.mp3', '.wav', '.ogg'])
 const notFound = err => ['ENOENT', 'ENOTDIR'].includes(err.code)
-const within = (path, root) => {
+export const within = (path, root) => {
   const rel = relative(root, path)
   return rel !== '..' && !rel.startsWith('..' + sep) && !isAbsolute(rel)
 }
@@ -80,6 +82,14 @@ async function snapshot(path, target, roots, userSelected) {
     if (['EPERM', 'EACCES', 'ELOOP'].includes(err.code)) return { availability: 'missing', unavailableReason: 'unreadable' }
     throw err
   }
+  try {
+    return await writeAttachment(handle.createReadStream(), path, target)
+  } finally {
+    await handle.close()
+  }
+}
+
+async function writeAttachment(stream, path, target) {
   let stage
   try {
     const dir = join(target, 'attachments')
@@ -89,20 +99,19 @@ async function snapshot(path, target, roots, userSelected) {
     const temp = join(stage, 'file')
     const hash = createHash('sha256')
     const meter = new Transform({ transform(chunk, encoding, callback) { hash.update(chunk); callback(null, chunk) } })
-    await pipeline(handle.createReadStream(), meter, createWriteStream(temp, { flags: 'wx' }))
+    await pipeline(stream, meter, createWriteStream(temp, { flags: 'wx' }))
     const digest = hash.digest('hex')
     const ext = extname(path).toLowerCase()
     const name = digest + (supportedInline.has(ext) ? ext : '.bin')
     await rename(temp, join(dir, name))
     return { href: 'attachments/' + name, digest }
   } finally {
-    await handle.close()
     if (stage) await rm(stage, { recursive: true, force: true })
   }
 }
 
 // Consume explicit external sources once. Reopening a replay uses its own packaged files.
-export async function collectExternalFiles(session, directory, assetRoots, nativeRoot) {
+export async function collectExternalFiles(session, directory, assetRoots, nativeRoot, sessionRoots = []) {
   const userFiles = new Set((session.items || []).filter(item => item.type === 'user').flatMap(item => item.deliverables || []))
   const files = [...(session.deliverables || session.files || []), ...(session.items || []).flatMap(item => item.deliverables || [])]
   if (!files.length) return false
@@ -112,9 +121,17 @@ export async function collectExternalFiles(session, directory, assetRoots, nativ
   if (originalWorkspace) {
     try { roots.push(await realpath(nativeRoot)) } catch (err) { if (!notFound(err)) throw err }
   }
+  for (const root of sessionRoots) roots.push(await realpath(root))
   const copies = new Map()
   let changed = false
   for (const file of files) {
+    if (file[recordedText] !== undefined) {
+      const copy = await writeAttachment(Readable.from([Buffer.from(file[recordedText])]), file.title, directory)
+      Object.assign(file, { href: copy.href, availability: 'export-copy' })
+      delete file[recordedText]
+      changed = true
+      continue
+    }
     if (!file.source && file.href && isLocal(file.href)) {
       // Root-relative web URLs belong to the host site. Explicit file: URLs are local.
       if (isAbsolute(file.href) && !within(file.href, homedir()) && !roots.some(root => within(file.href, root))) continue
