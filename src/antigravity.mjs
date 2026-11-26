@@ -14,8 +14,10 @@ export const antigravityStores = () => ({
 })
 
 export function nativeAntigravityLog(file) {
-  const path = realpathSync(file)
-  for (const [tool, root] of Object.entries(antigravityStores())) {
+  const path = realpathSync.native(file)
+  for (const [tool, store] of Object.entries(antigravityStores())) {
+    if (!existsSync(store)) continue
+    const root = realpathSync.native(store)
     const [id, system, logs, name, ...rest] = relative(root, path).split(sep)
     if (id !== '..' && system === '.system_generated' && logs === 'logs' &&
         /^transcript(?:_full)?\.jsonl$/.test(name) && !rest.length) {
@@ -108,7 +110,7 @@ export async function readAntigravity(records, { file, tool, native, images, ass
   const roots = await Promise.all((assetRoots?.length ? assetRoots : defaults).map(dir => realpath(resolve(dir))))
   const cwd = native?.workspaces?.[0] || native?.root
   // Native recordings own their media directory. A detached log only gets the caller's asset roots.
-  if (native) roots.push(native.root)
+  if (native) roots.push(await realpath(native.root))
   const userSelected = Boolean(native?.workspaces?.length && !assetRoots)
   let pending = []
   let model
