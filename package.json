@@ -1,6 +1,6 @@
 {
   "name": "@niracler/encore",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "A curtain call for your AI agent runs. Replay Codex, Claude Code, Claude.ai, WorkBuddy, and Antigravity sessions as an interactive web stage with a live context-window inspector.",
   "type": "module",
   "types": "./src/index.d.ts",
