@@ -636,7 +636,7 @@ test('README.md and README.zh-CN.md capability matrices match ADAPTER_CONTRACT',
     const match = content.match(blockPattern)
     assert.ok(match, `${fileName} must contain <!-- adapter-matrix:start --> ... <!-- adapter-matrix:end --> block`)
     assert.equal(
-      match[1].trim(),
+      match[1].replace(/\r\n/g, '\n').trim(),
       renderCapabilityMatrix(lang),
       `${fileName} capability matrix is out of sync with ADAPTER_CONTRACT`
     )
