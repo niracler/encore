@@ -18,7 +18,7 @@ import { attachPlayerController, createEncorePlayer, createSessionPlaybackModel 
 import { clipSession, findLeaks, redactSession, redactText } from './redact.mjs'
 import { buildPlayerData, elapsedClock, renderPlayerWidget, wallClock } from './render.mjs'
 import { openBrowser, serveReplayDir } from './server.mjs'
-import { binSeconds, describeStats, kindOf, minutes, sumStats, timeline, waitThreshold } from './timeline.mjs'
+import { binSeconds, describeStats, formatDuration, kindOf, minutes, sumStats, timeline, waitThreshold } from './timeline.mjs'
 
 const readers = {
   codex: readCodex,
@@ -236,6 +236,7 @@ export {
   escapeHtml,
   extractImages,
   findLeaks,
+  formatDuration,
   kindOf,
   minutes,
   openBrowser,

@@ -200,6 +200,9 @@ const toolNames = {
   SendUserFile: '把文件发给你', get_device_info: '查看你电脑的信息', read_process_output: '读取命令输出',
   device_request_folder_access: '请你允许访问文件夹', device_request_delete_permission: '请你允许删除文件',
   device_stage_files: '准备从你电脑传回文件', device_commit_files: '从你电脑传回文件',
+  send_message: '给子任务发消息', ask_question: '向你提问', exit_plan_mode: '提交方案',
+  manage_task: '管理后台任务', manage_subagents: '管理子任务', call_mcp_tool: '调用 MCP 工具',
+  search_marketplace: '搜索插件市场', list_plugin_accounts: '查看已连接账号',
 }
 
 const artifactNames = { read: '读取作品页', list: '列出作品', list_assets: '查看作品页里的文件', publish: '发布作品页' }
@@ -291,23 +294,33 @@ export function createTranscript() {
     items.push(item)
     return item
   }
+  const dedupeDeliverables = list => {
+    const seen = new Set()
+    return list.filter(file => {
+      const key = file.source?.path || file.href || file.title
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }
   return {
     items,
-    user(text, time, { images = [], references = [], cwd, ...extra } = {}) {
+    user(text, time, { images = [], references = [], cwd, captureLinks = true, ...extra } = {}) {
       text = String(text ?? '').trim() || (images.length ? '[图片]' : '')
-      const files = fileReferences([...references, ...messageReferences(text)], cwd)
-      if (files.length) extra.deliverables = [...(extra.deliverables || []), ...files]
+      const links = captureLinks ? messageReferences(text) : []
+      const files = fileReferences([...references, ...links], cwd)
+      if (files.length) extra.deliverables = dedupeDeliverables([...(extra.deliverables || []), ...files])
       if (text) add({ type: 'user', text, time, ...extra, images: images.length ? images : undefined })
     },
-    assistant(text, time, { key, cwd, ...extra } = {}) {
+    assistant(text, time, { key, cwd, captureLinks = true, ...extra } = {}) {
       text = String(text ?? '').trim()
       if (!text) return
       const last = items.at(-1)
-      const files = fileReferences(messageReferences(text), cwd)
+      const files = captureLinks ? fileReferences(messageReferences(text), cwd) : []
       if (files.length) extra.deliverables = files
       if (key && last?.type === 'assistant' && last.key === key) {
         last.text += `\n\n${text}`
-        if (files.length) last.deliverables = [...(last.deliverables || []), ...files]
+        if (files.length) last.deliverables = dedupeDeliverables([...(last.deliverables || []), ...files])
       }
       else add({ type: 'assistant', text, time, key, ...extra })
     },

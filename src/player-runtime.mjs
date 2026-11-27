@@ -201,13 +201,16 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
       resumeFollow() {
         userPausedFollow = false
       },
-      scrollTo(nextTop) {
+      scrollTo(nextTop, instant = false) {
         if (!chatScroll) return
-        if (calm.matches) {
-          chatScroll.scrollTop = Math.max(0, nextTop)
+        const maxScroll = Math.max(0, chatScroll.scrollHeight - chatScroll.clientHeight)
+        const clamped = Math.max(0, Math.min(maxScroll, nextTop))
+        if (instant || calm.matches) {
+          stop()
+          chatScroll.scrollTop = clamped
           return
         }
-        targetTop = Math.max(0, nextTop)
+        targetTop = clamped
         if (!rafId) {
           lastTs = 0
           rafId = requestAnimationFrame(tick)
@@ -220,26 +223,28 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
           this.scrollTo(maxScroll)
         }
       },
-      frameEntry(entry, isForward) {
+      frameEntry(entry, isForward, { instant = false, tailEntry = null } = {}) {
         if (!chatScroll || !entry) return
         const paneRect = chatScroll.getBoundingClientRect()
         const rect = entry.getBoundingClientRect()
+        const tailRect = tailEntry ? tailEntry.getBoundingClientRect() : rect
         const entryTop = rect.top - paneRect.top + chatScroll.scrollTop
-        const entryBottom = entryTop + rect.height
+        const entryBottom = Math.max(entryTop + rect.height, tailRect.bottom - paneRect.top + chatScroll.scrollTop)
+        const totalHeight = entryBottom - entryTop
         const viewTop = chatScroll.scrollTop
         const viewH = chatScroll.clientHeight
         const viewBottom = viewTop + viewH
 
-        if (entryTop >= viewTop + 16 && entryBottom <= viewBottom - 24) return
+        if (entryTop >= viewTop + 16 && entryBottom <= viewBottom - 36) return
 
-        if (isForward && entryBottom > viewBottom - 24) {
-          if (rect.height <= viewH - 52) {
-            this.scrollTo(entryBottom - viewH + 28)
+        if (isForward && entryBottom > viewBottom - 36) {
+          if (totalHeight <= viewH - 64) {
+            this.scrollTo(entryBottom - viewH + 40, instant)
           } else {
-            this.scrollTo(entryTop - 20)
+            this.scrollTo(entryTop - 20, instant)
           }
         } else if (entryTop < viewTop + 20 || !isForward) {
-          this.scrollTo(entryTop - 24)
+          this.scrollTo(entryTop - 24, instant)
         }
       },
     }
@@ -467,7 +472,10 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
       }
     }
     const totEl = asidePane.querySelector('[data-context-tot]')
-    if (totEl) totEl.textContent = contextUsageLabel(snap, t, stepState.index < 0)
+    if (totEl) {
+      totEl.textContent = contextUsageLabel(snap, t, stepState.index < 0)
+      totEl.title = snap.totalTokens != null ? `${snap.totalTokens.toLocaleString(t.lang)} tokens` : ''
+    }
     const winEl = asidePane.querySelector('[data-context-win]')
     if (winEl) winEl.textContent = snap.windowLabel || t('unknownCapacity')
     const unit = asidePane.querySelector('[data-capacity-unit]')
@@ -479,6 +487,8 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
     }
     const bar = asidePane.querySelector('[data-stacked-bar]')
     if (bar) bar.hidden = snap.pct == null
+    const legend = asidePane.querySelector('[data-lc-legend]')
+    if (legend) legend.hidden = !Object.values(snap.tokensByKind || {}).some(val => val != null)
 
     for (const [key, val] of Object.entries(snap.segments || {})) {
       const seg = asidePane.querySelector(`[data-seg="${key}"]`)
@@ -487,7 +497,7 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
 
     for (const [key, val] of Object.entries(snap.tokensByKind || {})) {
       const tokEl = asidePane.querySelector(`[data-pro-tok="${key}"]`)
-      if (tokEl) tokEl.textContent = categoryUsageLabel(val, t)
+      if (tokEl) tokEl.textContent = categoryUsageLabel(val)
     }
 
     const browserBox = asidePane.querySelector('[data-context-browser]')
@@ -643,6 +653,8 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
   const labelObserver = tlPins.length ? new ResizeObserver(fitTimelineLabels) : null
   if (labelObserver) labelObserver.observe(tlTrack)
   tlRange?.addEventListener('input', () => seekFromTimeline(tlRange.valueAsNumber - 1))
+  tlRange?.addEventListener('change', () => renderTimelineHover(null))
+  tlRange?.addEventListener('pointerup', () => renderTimelineHover(null))
   tlRange?.addEventListener('pointerdown', () => { if (playing) setPlaying(false) })
   tlTrack?.addEventListener('pointermove', event => {
     const pin = event.target.closest('[data-tl-jump]')
@@ -653,6 +665,7 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
     renderTimelineHover(Math.max(0, Math.min(steps.length - 1, step - 1)))
   })
   tlTrack?.addEventListener('focusin', event => {
+    if (!event.target?.matches?.(':focus-visible')) return
     const pin = event.target.closest('[data-tl-jump]')
     renderTimelineHover(pin ? Number(pin.dataset.tlJump) : playHead)
   })
@@ -663,7 +676,10 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
   tlTrack?.addEventListener('pointerleave', () => renderTimelineHover(null))
   tlTrack?.addEventListener('click', event => {
     const pin = event.target.closest('[data-tl-jump]')
-    if (pin) seekFromTimeline(Number(pin.dataset.tlJump))
+    if (pin) {
+      seekFromTimeline(Number(pin.dataset.tlJump))
+      renderTimelineHover(null)
+    }
   })
 
   asidePane?.addEventListener('click', event => {
@@ -1052,11 +1068,14 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
       item.entry.classList.toggle('is-future', future)
       if (!future) latestVisibleEntry = item.entry
     }
+    let latestAuxForHead = null
     for (const aux of auxEntries) {
       if (aux.forStep > playHead && aux.entry.matches('.session-files:not(.is-future)')) {
         aux.entry.querySelectorAll('video').forEach(video => video.pause())
       }
-      aux.entry.classList.toggle('is-future', aux.forStep > playHead)
+      const future = aux.forStep > playHead
+      aux.entry.classList.toggle('is-future', future)
+      if (!future && aux.forStep === playHead) latestAuxForHead = aux.entry
     }
 
     const steppedForwardOne = !isInitialMount && playHead === prevRenderedHead + 1 && playHead >= 0
@@ -1069,9 +1088,12 @@ export function attachPlayerController(containerEl, playerData, { lang = 'zh', i
     runHeadChoreography(headState, headEntry, isNewHead, steppedForwardOne)
 
     if (latestVisibleEntry && (playing || follow)) {
-      camera.frameEntry(latestVisibleEntry, isForwardMove)
+      camera.frameEntry(latestVisibleEntry, isForwardMove, {
+        instant: !playing && !steppedForwardOne,
+        tailEntry: latestAuxForHead,
+      })
     } else if (playHead < 0 && chatScroll && follow) {
-      camera.scrollTo(0)
+      camera.scrollTo(0, !playing)
     }
     follow = false
   }

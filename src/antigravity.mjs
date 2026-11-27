@@ -5,8 +5,7 @@ import { readFile, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { createTranscript, describeTool } from './common.mjs'
-import { redactText } from './redact.mjs'
-import { fileReferences, recordedText, within } from './external-files.mjs'
+import { fileReferences, within } from './external-files.mjs'
 
 export const antigravityStores = () => ({
   'antigravity-app': join(homedir(), '.gemini', 'antigravity', 'brain'),
@@ -83,9 +82,33 @@ function reviewedFiles(name, args, cwd) {
   if (name === 'exit_plan_mode' && typeof args.plan === 'string' && args.plan.trim()) {
     const plan = args.plan.trim()
     if (/^(?:file:\/\/|\/|[A-Z]:[\\/])[^\n]*\.md$/i.test(plan)) return fileReferences([plan], cwd)
-    return [{ title: 'implementation_plan.md', [recordedText]: redactText(plan) }]
   }
   return []
+}
+
+function parseSubagentReply(content = '', subagents = new Map()) {
+  const match = String(content).match(/\[Message\][^\n]*?\bsender=([^\s\]]+)[^\n]*?\bcontent=([\s\S]*?)(?:\s*<\/SYSTEM_MESSAGE>\s*)?$/)
+  if (!match) return null
+  const [, sender, rawReport] = match
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sender)
+  const agent = subagents.get(sender) || (isUuid ? `Subagent ${sender.slice(0, 8)}` : '')
+  if (!agent) return null
+  const report = rawReport.replace(/^(?:COMPLETED\s*\/\s*TASK_COMPLETED|TASK_COMPLETED|COMPLETED)\s*\n+/i, '').trim()
+  return report ? { agent, report } : null
+}
+
+const TRANSIENT_ERROR_RE = /^(?:API error \(attempt \d+\):|The stream was interrupted\.)/i
+const IGNORED_UI_TOOLS = new Set(['update_focus', 'update_steps'])
+
+function hasSubsequentRecovery(records, index) {
+  for (let i = index + 1; i < records.length; i++) {
+    const next = records[i]
+    if (next.type === 'USER_INPUT') return false
+    if (next.type === 'PLANNER_RESPONSE' && !next.error && (next.content || next.thinking || next.tool_calls?.length)) {
+      return true
+    }
+  }
+  return false
 }
 
 export async function readAntigravity(records, { file, tool, native, images, assetRoots, includeMemory }) {
@@ -99,16 +122,24 @@ export async function readAntigravity(records, { file, tool, native, images, ass
   if (native) roots.push(await realpath(native.root))
   const userSelected = Boolean(native?.workspaces?.length && !assetRoots)
   let pending = []
+  let deferredUsage = null
+  const pendingSubagents = new Map()
+  const subagents = new Map()
   let model
   let tokens = 0
-  for (const record of records) {
+  for (let idx = 0; idx < records.length; idx++) {
+    const record = records[idx]
     const { type, created_at: time, content = '', step_index: step } = record
     if (type === 'USER_INPUT') {
       pending = []
+      const before = transcript.items.length
       transcript.user(antigravityPrompt(content), time, {
         images: images ? await loadMedia(record.media, logDir, roots, userSelected) : [],
         cwd,
+        captureLinks: false,
+        ...(deferredUsage || {}),
       })
+      if (transcript.items.length > before) deferredUsage = null
     } else if (type === 'PLANNER_RESPONSE') {
       pending = []
       model = record.model || model
@@ -120,39 +151,106 @@ export async function readAntigravity(records, { file, tool, native, images, ass
       if (estimates) usage.contextTokenEstimates = estimates
       if (metadata?.variableWindows) usage.contextWindow = metadata.windows.get(step) || 0
       tokens += (usage.contextTokens || 0) + (record.output_tokens || 0)
-      transcript.reasoning(record.thinking, time, usage)
-      transcript.assistant(content, time, { cwd, ...usage })
+      const effectiveUsage = deferredUsage ? { ...deferredUsage, ...usage } : usage
+      const before = transcript.items.length
+      transcript.reasoning(record.thinking, time, effectiveUsage)
+      transcript.assistant(content, time, { cwd, captureLinks: false, ...effectiveUsage })
       for (const [i, call] of (record.tool_calls || []).entries()) {
         const id = step + '/' + i
         const args = call.args || {}
         const name = call.name || 'tool'
         const base = name.replace(/^mcp_ide-tools_/, '')
+        if (IGNORED_UI_TOOLS.has(base)) {
+          pending.push(null)
+          continue
+        }
+        const inlinePlan = base === 'exit_plan_mode' && typeof args.plan === 'string' && args.plan.trim()
+          && !/^(?:file:\/\/|\/|[A-Z]:[\\/])[^\n]*\.md$/i.test(args.plan.trim())
+          ? args.plan.trim()
+          : undefined
+        const recipientRole = base === 'send_message' && typeof args.Recipient === 'string'
+          ? subagents.get(args.Recipient)
+          : undefined
         const details = describeTool(base, {
           ...args,
           ...(args.CommandLine && { command: args.CommandLine }),
           ...(args.Path && { path: args.Path }),
+          ...(args.Content !== undefined && { content: args.Content }),
+          ...(args.Role ? { description: args.Role } : args.TypeName ? { description: args.TypeName } : {}),
+          ...(args.Prompt && { prompt: args.Prompt }),
+          ...(args.Message && { message: args.Message }),
         })
-        const item = transcript.tool(id, { ...details, name, ...usage }, time)
+        if (inlinePlan) {
+          details.input = inlinePlan
+          details.file = 'implementation_plan.md'
+        }
+        if (recipientRole) {
+          details.summary = `给子任务发消息：${recipientRole}`
+          if (args.Message) details.input = args.Message
+        }
+        const item = transcript.tool(id, { ...details, name, ...effectiveUsage }, time)
+        if (base === 'invoke_subagent') {
+          pendingSubagents.set(id, args.Role || args.TypeName || item.agent || 'Subagent')
+        }
         const files = reviewedFiles(base, args, cwd)
         if (files.length) item.deliverables = files
         pending.push(id)
       }
+      if (transcript.items.length > before) {
+        deferredUsage = null
+      } else if (Object.keys(effectiveUsage).length) {
+        deferredUsage = effectiveUsage
+      }
     } else if (type === 'GENERIC') {
       // Each batch's result steps follow its tool calls in trajectory order.
       const id = pending.shift()
+      if (id === null) continue
       const output = content.replace(/^(?:(?:Created At|Completed At):[^\n]*(?:\n|$))+/u, '').trim()
       const done = content.match(/^Completed At:\s*([^\r\n]+)/m)?.[1] || time
-      if (id !== undefined) transcript.result(id, [output, record.error].filter(Boolean).join('\n'), done,
-        images ? await loadMedia(record.media, logDir, roots) : [], cwd)
+      if (id !== undefined) {
+        if (pendingSubagents.has(id)) {
+          const convId = output.match(/"conversationId"\s*:\s*"([^"]+)"/)?.[1]
+          if (convId) subagents.set(convId, pendingSubagents.get(id))
+          pendingSubagents.delete(id)
+        }
+        transcript.result(id, [output, record.error].filter(Boolean).join('\n'), done,
+          images ? await loadMedia(record.media, logDir, roots) : [], cwd)
+      }
+    } else if (type === 'SYSTEM_MESSAGE') {
+      const subagentReply = parseSubagentReply(content, subagents)
+      if (subagentReply) {
+        transcript.tool(null, {
+          name: 'agent-message',
+          kind: 'reply',
+          summary: `子任务交回结果：${subagentReply.agent}`,
+          output: subagentReply.report,
+          stats: { reply: 1 },
+          agent: subagentReply.agent,
+          ...(deferredUsage || {}),
+        }, time)
+        deferredUsage = null
+      }
     } else if (type === 'CHECKPOINT' && record.status === 'DONE' && !record.error) {
       const summary = content.match(/<summary>([\s\S]*?)<\/summary>/i)?.[1]?.trim()
       const text = summary && !includeMemory
         ? summary.replace(/<external_system_instructions>[\s\S]*?(?:<\/external_system_instructions>|$)|========= MEMORY_SUMMARY BEGINS =========[\s\S]*?(?:========= MEMORY_SUMMARY ENDS =========|$)/gi, '[Private context omitted]')
         : summary
-      transcript.compact(text ? { text } : {}, time)
+      transcript.compact({
+        ...(text && { text }),
+        ...(deferredUsage?.contextTokens > 0 && { preTokens: deferredUsage.contextTokens }),
+        ...(deferredUsage?.contextWindow != null && { contextWindow: deferredUsage.contextWindow }),
+      }, time)
+      deferredUsage = null
     } else if (type === 'ERROR_MESSAGE') {
-      transcript.assistant(record.error || content, time)
+      const text = String(record.error || content || '').trim()
+      if (text && !(TRANSIENT_ERROR_RE.test(text) && hasSubsequentRecovery(records, idx))) {
+        transcript.assistant(text, time, { cwd, captureLinks: false, ...(deferredUsage || {}) })
+        deferredUsage = null
+      }
     }
+  }
+  if (deferredUsage && transcript.items.length) {
+    Object.assign(transcript.items.at(-1), deferredUsage)
   }
   return transcript.finish({ tool, model, tokens: tokens || undefined,
     contextWindow: metadata?.contextWindow, initialContext: metadata?.initialContext,
