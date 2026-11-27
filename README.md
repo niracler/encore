@@ -21,6 +21,20 @@ Antigravity App and CLI share a tab with the source shown on each row. The picke
 
 Encore writes to a temporary directory by default. To keep the replay, add `-o ./my-replay` to the command.
 
+## Supported agents
+
+<!-- adapter-matrix:start -->
+| Agent | Opening context | Token & 7-color bar | Compaction | Sub-agent reports | Markdown drafts | Media frames | Memory redaction |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Codex | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Claude Code | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Antigravity (App / CLI) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| WorkBuddy | — | — | — | — | ✅ | ✅ | — |
+| Claude.ai | — | — | — | — | — | — | — |
+<!-- adapter-matrix:end -->
+
+`—` means the source log format does not record that signal. Verified on every commit by [`test/adapter-conformance.test.mjs`](./test/adapter-conformance.test.mjs).
+
 ## How it works
 
 <p align="center">

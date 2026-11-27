@@ -24,6 +24,43 @@ const FAKE_HOME_PATH = '/Users/private-tester/secret-project/notes.md'
 
 const SCHEMA_PATH = fileURLToPath(new URL('../schema/session.schema.json', import.meta.url))
 const SESSION_SCHEMA = JSON.parse(readFileSync(SCHEMA_PATH, 'utf8'))
+const README_EN_PATH = fileURLToPath(new URL('../README.md', import.meta.url))
+const README_ZH_PATH = fileURLToPath(new URL('../README.zh-CN.md', import.meta.url))
+
+const MATRIX_LABELS = {
+  en: {
+    headers: ['Agent', 'Opening context', 'Token & 7-color bar', 'Compaction', 'Sub-agent reports', 'Markdown drafts', 'Media frames', 'Memory redaction'],
+    adapters: {
+      codex: 'Codex',
+      'claude-code': 'Claude Code',
+      antigravity: 'Antigravity (App / CLI)',
+      workbuddy: 'WorkBuddy',
+      'claude-ai': 'Claude.ai',
+    },
+  },
+  zh: {
+    headers: ['Agent', '初始上下文', 'Token 与 7 色条', '上下文压缩', '子 Agent 报告', 'Markdown 草稿卡', '过程画面', '隐私记忆脱敏'],
+    adapters: {
+      codex: 'Codex',
+      'claude-code': 'Claude Code',
+      antigravity: 'Antigravity（App / CLI）',
+      workbuddy: 'WorkBuddy',
+      'claude-ai': 'Claude.ai',
+    },
+  },
+}
+
+function renderCapabilityMatrix(lang) {
+  const { headers, adapters } = MATRIX_LABELS[lang]
+  const sep = `| --- | ${CAPABILITIES.map(() => ':---:').join(' | ')} |`
+  const rows = Object.entries(ADAPTER_CONTRACT).map(([id, spec]) => {
+    const label = adapters[id]
+    assert.ok(label, `missing ${lang} display label in MATRIX_LABELS for adapter "${id}"`)
+    const cells = CAPABILITIES.map(cap => (spec.capabilities[cap] ? '✅' : '—'))
+    return `| ${label} | ${cells.join(' | ')} |`
+  })
+  return [`| ${headers.join(' | ')} |`, sep, ...rows].join('\n')
+}
 
 function sandbox(t) {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'encore-conform-')))
@@ -586,6 +623,23 @@ test('every tool in src/common.mjs and schema/session.schema.json is registered 
   }
   for (const tool of toolKeys) {
     assert.ok(covered.has(tool), `tool "${tool}" must be registered in ADAPTER_CONTRACT (add its capabilities and fixture)`)
+  }
+})
+
+test('README.md and README.zh-CN.md capability matrices match ADAPTER_CONTRACT', () => {
+  const blockPattern = /<!-- adapter-matrix:start -->\r?\n([\s\S]*?)\r?\n<!-- adapter-matrix:end -->/
+  for (const [lang, path, fileName] of [
+    ['en', README_EN_PATH, 'README.md'],
+    ['zh', README_ZH_PATH, 'README.zh-CN.md'],
+  ]) {
+    const content = readFileSync(path, 'utf8')
+    const match = content.match(blockPattern)
+    assert.ok(match, `${fileName} must contain <!-- adapter-matrix:start --> ... <!-- adapter-matrix:end --> block`)
+    assert.equal(
+      match[1].trim(),
+      renderCapabilityMatrix(lang),
+      `${fileName} capability matrix is out of sync with ADAPTER_CONTRACT`
+    )
   }
 })
 

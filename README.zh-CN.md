@@ -21,6 +21,20 @@ Antigravity App 和 CLI 共用一个标签，每行显示来源。选择器优�
 
 回放默认写入系统临时目录。想保留下来，可以在命令末尾加上 `-o ./my-replay`。
 
+## 支持的 Agent
+
+<!-- adapter-matrix:start -->
+| Agent | 初始上下文 | Token 与 7 色条 | 上下文压缩 | 子 Agent 报告 | Markdown 草稿卡 | 过程画面 | 隐私记忆脱敏 |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Codex | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Claude Code | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Antigravity（App / CLI） | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| WorkBuddy | — | — | — | — | ✅ | ✅ | — |
+| Claude.ai | — | — | — | — | — | — | — |
+<!-- adapter-matrix:end -->
+
+`—` 表示该工具的原始导出日志不包含对应字段。此矩阵由 [`test/adapter-conformance.test.mjs`](./test/adapter-conformance.test.mjs) 在每次 CI 中自动核对。
+
 ## 工作原理
 
 <p align="center">
