@@ -1,7 +1,7 @@
 import { createTranslator } from './i18n.mjs'
 import { renderAttachment } from './attachment-reader.mjs'
 import { escapeHtml as escape, renderMarkdown } from './markdown.mjs'
-import { binSeconds, describeStats, minutes, sumStats, timeline } from './timeline.mjs'
+import { binSeconds, describeStats, formatDuration, minutes, sumStats, timeline } from './timeline.mjs'
 
 const toolLabels = {
   codex: 'Codex',
@@ -45,10 +45,12 @@ export function wallClock(start, seconds = 0, withSeconds = false) {
 
 export function elapsedClock(seconds = 0) {
   const s = Math.max(0, Math.round(seconds))
-  const h = Math.floor(s / 3600)
+  const d = Math.floor(s / 86400)
+  const h = Math.floor((s % 86400) / 3600)
   const m = Math.floor((s % 3600) / 60)
   const rem = s % 60
   const pad = n => String(n).padStart(2, '0')
+  if (d > 0) return `${d}d ${pad(h)}:${pad(m)}:${pad(rem)}`
   return h > 0 ? `${h}:${pad(m)}:${pad(rem)}` : `${pad(m)}:${pad(rem)}`
 }
 
@@ -243,19 +245,27 @@ function renderBrowserCategories(categories = [], t) {
   }).join('')
 }
 
-export function contextUsageLabel(snapshot, t, opening = false) {
-  if (snapshot.totalTokens == null) return t(opening ? 'initialUsageMissing' : 'usageMissing')
-  if (snapshot.estimated != null) return (snapshot.estimated ? '≈' : '') + snapshot.totalTokens.toLocaleString(t.lang)
-  return (snapshot.totalTokens / 1000).toFixed(1) + 'k'
+export function formatTokenCount(tokens) {
+  if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(2).replace(/\.?0+$/, '')}M`
+  if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}k`
+  return String(tokens)
 }
 
-export function categoryUsageLabel(value, t) {
-  return value == null ? t('notRecorded') : `≈${(value / 1000).toFixed(1)}k`
+export function contextUsageLabel(snapshot, t, opening = false) {
+  if (snapshot.totalTokens == null) return t(opening ? 'initialUsageMissing' : 'usageMissing')
+  const formatted = formatTokenCount(snapshot.totalTokens)
+  return snapshot.estimated === true ? `≈${formatted}` : formatted
+}
+
+export function categoryUsageLabel(value) {
+  return value == null ? '' : `≈${(value / 1000).toFixed(1)}k`
 }
 
 function contextSidebar(line, t) {
   const initial = line.initialSnapshot
-  const tok = n => categoryUsageLabel(n, t)
+  const tok = n => categoryUsageLabel(n)
+  const hasBreakdown = Object.values(initial.tokensByKind || {}).some(v => v != null)
+  const exactTitle = initial.totalTokens != null ? ` title="${escape(`${initial.totalTokens.toLocaleString(t.lang)} tokens`)}"` : ''
   return `<aside class="session-context-aside" aria-label="${escape(t('activeContext'))}" data-session-aside>
     <section class="sp-aside-sec" aria-label="${escape(t('activeContext'))}">
       <div class="sp-sec-head">
@@ -263,7 +273,7 @@ function contextSidebar(line, t) {
         <span class="sp-sec-snap" data-context-snap>${escape(t('snapInitial'))}</span>
       </div>
       <div class="lc-overview-num">
-        <b data-context-tot>${escape(contextUsageLabel(initial, t, true))}</b>
+        <b data-context-tot${exactTitle}>${escape(contextUsageLabel(initial, t, true))}</b>
         <span>/ <span data-context-win>${escape(initial.windowLabel || t('unknownCapacity'))}</span><span data-capacity-unit${initial.windowLabel ? '' : ' hidden'}> tokens</span></span>
         <span class="lc-overview-pct"${initial.pct == null ? ' hidden' : ''}><b data-context-pct>${initial.pct == null ? '' : initial.pct + '%'}</b>${escape(t('usedSuffix'))}</span>
       </div>
@@ -271,7 +281,7 @@ function contextSidebar(line, t) {
         ${Object.entries(initial.segments).map(([key, width]) => `<div class="lc-stacked-seg is-${escape(key)}" data-seg="${escape(key)}"${key === 'used' ? '' : ` data-cat-key="${escape(key)}"`} style="width:${Number(width)}%"></div>`).join('')}
         <div class="lc-stacked-free" title="${escape(t('freeSpaceTitle'))}"></div>
       </div>
-      <div class="lc-legend" data-lc-legend>
+      <div class="lc-legend" data-lc-legend${hasBreakdown ? '' : ' hidden'}>
         <span class="lc-chip" data-cat-key="sys"><i class="session-cat-dot is-sys"></i><span class="lc-chip-label">${escape(t('legendSys'))}</span><span class="lc-chip-nums" data-pro-tok="sys">${escape(tok(initial.tokensByKind.sys))}</span></span>
         <span class="lc-chip" data-cat-key="schema"><i class="session-cat-dot is-schema"></i><span class="lc-chip-label">${escape(t('legendSchema'))}</span><span class="lc-chip-nums" data-pro-tok="schema">${escape(tok(initial.tokensByKind.schema))}</span></span>
         <span class="lc-chip" data-cat-key="user"><i class="session-cat-dot is-user"></i><span class="lc-chip-label">${escape(t('legendUser'))}</span><span class="lc-chip-nums" data-pro-tok="user">${escape(tok(initial.tokensByKind.user))}</span></span>
@@ -300,7 +310,7 @@ function renderDeliverable(file, t, baseUrl) {
     return `<section class="session-file-missing" data-availability="missing"><strong>${escape(file.title)}</strong><small>${escape(t(notice))}</small></section>`
   }
   const notice = t(file.availability === 'verified' ? 'fileVerified' : file.sessionSha256 ? 'fileHashMismatch' : 'fileExportCopy')
-  return `<div class="session-file-copy" data-availability="${escape(file.availability)}"><small>${escape(notice)}</small>${renderFileContents(file, t, baseUrl)}</div>`
+  return `<div class="session-file-copy" data-availability="${escape(file.availability)}">${renderFileContents(file, t, baseUrl)}<small>${escape(notice)}</small></div>`
 }
 
 function renderFileContents(file, t, baseUrl) {
@@ -380,9 +390,7 @@ function renderLog(session, line, { t, baseUrl = '' }) {
     const summaryText = count
       ? (describeStats(stats, undefined, t.lang) || (t.lang === 'en' ? `Ran ${count} step(s)` : `执行了 ${count} 步操作`))
       : (t.lang === 'en' ? 'Thought before replying' : '进行了思考推理')
-    const durationText = t.lang === 'en'
-      ? (span >= 60 ? `${minutes(span)}m` : `${Math.max(1, Math.round(span))}s`)
-      : (span >= 60 ? `${minutes(span)} 分钟` : `${Math.max(1, Math.round(span))} 秒`)
+    const durationText = formatDuration(span, t.lang)
     const stepWord = count
       ? (t.lang === 'en' ? `${count} steps` : `${count} 步`)
       : (t.lang === 'en' ? `${thinkCount} thought(s)` : `${thinkCount} 段思考`)

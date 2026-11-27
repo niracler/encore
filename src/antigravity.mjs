@@ -88,6 +88,8 @@ function reviewedFiles(name, args, cwd) {
   return []
 }
 
+const IGNORED_UI_TOOLS = new Set(['update_focus', 'update_steps'])
+
 export async function readAntigravity(records, { file, tool, native, images, assetRoots, includeMemory }) {
   const transcript = createTranscript()
   const metadata = readAntigravityContext(native, records, includeMemory)
@@ -108,6 +110,7 @@ export async function readAntigravity(records, { file, tool, native, images, ass
       transcript.user(antigravityPrompt(content), time, {
         images: images ? await loadMedia(record.media, logDir, roots, userSelected) : [],
         cwd,
+        captureLinks: false,
       })
     } else if (type === 'PLANNER_RESPONSE') {
       pending = []
@@ -121,16 +124,24 @@ export async function readAntigravity(records, { file, tool, native, images, ass
       if (metadata?.variableWindows) usage.contextWindow = metadata.windows.get(step) || 0
       tokens += (usage.contextTokens || 0) + (record.output_tokens || 0)
       transcript.reasoning(record.thinking, time, usage)
-      transcript.assistant(content, time, { cwd, ...usage })
+      transcript.assistant(content, time, { cwd, captureLinks: false, ...usage })
       for (const [i, call] of (record.tool_calls || []).entries()) {
         const id = step + '/' + i
         const args = call.args || {}
         const name = call.name || 'tool'
         const base = name.replace(/^mcp_ide-tools_/, '')
+        if (IGNORED_UI_TOOLS.has(base)) {
+          pending.push(null)
+          continue
+        }
         const details = describeTool(base, {
           ...args,
           ...(args.CommandLine && { command: args.CommandLine }),
           ...(args.Path && { path: args.Path }),
+          ...(args.Content !== undefined && { content: args.Content }),
+          ...(args.Role ? { description: args.Role } : args.TypeName ? { description: args.TypeName } : {}),
+          ...(args.Prompt && { prompt: args.Prompt }),
+          ...(args.Message && { message: args.Message }),
         })
         const item = transcript.tool(id, { ...details, name, ...usage }, time)
         const files = reviewedFiles(base, args, cwd)
@@ -140,6 +151,7 @@ export async function readAntigravity(records, { file, tool, native, images, ass
     } else if (type === 'GENERIC') {
       // Each batch's result steps follow its tool calls in trajectory order.
       const id = pending.shift()
+      if (id === null) continue
       const output = content.replace(/^(?:(?:Created At|Completed At):[^\n]*(?:\n|$))+/u, '').trim()
       const done = content.match(/^Completed At:\s*([^\r\n]+)/m)?.[1] || time
       if (id !== undefined) transcript.result(id, [output, record.error].filter(Boolean).join('\n'), done,

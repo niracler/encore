@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import test from 'node:test'
 import { pathToFileURL } from 'node:url'
 import sharp from 'sharp'
-import { buildReplay, renderPlayerWidget, timeline } from '../src/index.mjs'
+import { buildReplay, elapsedClock, formatDuration, renderPlayerWidget, timeline } from '../src/index.mjs'
 import { createSessionCatalog } from '../src/detect.mjs'
 import { pickSession } from '../src/session-picker.mjs'
 
@@ -291,12 +291,67 @@ test('only completed Antigravity checkpoints mark compaction; unmeasured steps h
   const [cp] = checkpoints
   assert.equal(cp.compactInfo.content, 'Recorded summary')
   assert.equal(cp.compactInfo.trigger, undefined)
-  assert.equal(cp.compactInfo.droppedTokens, undefined)
+  assert.equal(cp.compactInfo.preTokens, 10000)
+  assert.equal(cp.compactInfo.postTokens, 5000)
+  assert.equal(cp.compactInfo.droppedTokens, 5000)
   assert.equal(cp.contextSnapshot.totalTokens, null)
   assert.equal(line.steps[cp.index + 1].contextSnapshot.totalTokens, null)
   assert.equal(line.steps.at(-1).contextSnapshot.totalTokens, 5000)
   const html = renderPlayerWidget(session, line, { lang: 'zh' })
   assert.match(html, /上下文压缩 #1/)
+  assert.match(html, /10\.0k → 5\.0k/)
   assert.ok(html.includes('datetime="' + checkpoint.created_at + '"'))
   assert.doesNotMatch(html, /自动压缩|lc-trigger|lc-reserve|已归档前序|释放约/)
+})
+
+test('Antigravity replays carry forward recorded usage across user turns, unify token units, hide empty legends, filter UI status calls, and surface sub-agents', async t => {
+  const dir = sandbox(t)
+  const file = join(dir, 'transcript.jsonl')
+  const note = join(dir, 'outside.md')
+  writeFileSync(note, '# External note')
+  log(file, [
+    step(0, 'USER_INPUT', { content: '<USER_REQUEST>Start work</USER_REQUEST>' }),
+    step(1, 'PLANNER_RESPONSE', {
+      input_tokens: 300000,
+      cache_read_tokens: 8861,
+      tool_calls: [
+        { name: 'update_focus', args: { focus: 'Working' } },
+        { name: 'update_steps', args: { steps: [{ title: 'Step 1', status: 'in_progress' }] } },
+        { name: 'invoke_subagent', args: { TypeName: 'browser', Role: 'Slide Previewer', Prompt: 'Inspect slide 14' } },
+      ],
+    }),
+    step(2, 'GENERIC', { content: 'OK' }),
+    step(3, 'GENERIC', { content: 'OK' }),
+    step(4, 'GENERIC', { content: 'Created the following subagent:\n{"conversationId":"sub-1"}' }),
+    step(5, 'PLANNER_RESPONSE', { content: `Reviewed [outside.md](${pathToFileURL(note).href}) and finished.`, input_tokens: 308861 }),
+    step(6, 'USER_INPUT', { content: '<USER_REQUEST>Next turn without new token sample</USER_REQUEST>' }),
+    step(7, 'CHECKPOINT', { source: 'SYSTEM', content: '<summary>Final checkpoint without post sample</summary>' }),
+  ])
+  const { session } = await buildReplay(file, { outDir: join(dir, 'replay'), images: false })
+  const toolItems = session.items.filter(item => item.type === 'tool')
+  assert.deepEqual(toolItems.map(item => item.name), ['invoke_subagent'])
+  assert.equal(toolItems[0].agent, 'Slide Previewer')
+  const reply = session.items.find(item => item.type === 'assistant')
+  assert.equal(reply.deliverables, undefined, 'Antigravity prose file:// links should not spam deliverables')
+
+  const line = timeline({ ...session, contextWindow: 512000 }, { lang: 'zh' })
+  const workStep = line.steps.find(s => s.subagents?.length)
+  assert.ok(workStep, 'invoke_subagent should render as a sub-agent pill')
+  assert.equal(workStep.subagents[0].label, 'Slide Previewer')
+  assert.equal(workStep.subagents[0].state, 'sent')
+
+  const secondUser = line.steps.find(s => s.kind === 'prompt' && s.turn === 2)
+  assert.equal(secondUser.contextSnapshot.totalTokens, 308861, 'subsequent user turns should carry forward recorded usage instead of flickering to null')
+  assert.equal(secondUser.contextSnapshot.pct, 60.3)
+
+  const trailingCompact = line.steps.find(s => s.compactInfo)
+  assert.equal(trailingCompact.compactInfo.droppedTokens, undefined, 'checkpoint without a post-compaction sample must not invent droppedTokens')
+
+  const html = renderPlayerWidget({ ...session, contextWindow: 512000 }, line, { lang: 'zh' })
+  assert.match(html, /data-lc-legend hidden/, '7-chip legend should stay hidden when no category token breakdown exists')
+  assert.doesNotMatch(html, /class="lc-br-tokens">未记录</, 'category rows should not repeat 未记录 when breakdown is absent')
+  assert.equal(elapsedClock(210452), '2d 10:27:32')
+  assert.equal(formatDuration(210452, 'zh'), '2 天 10 小时')
+  assert.equal(formatDuration(210452, 'en'), '2d 10h')
+  assert.equal(formatDuration(1560, 'zh'), '26 分钟')
 })

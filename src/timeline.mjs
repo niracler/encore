@@ -187,7 +187,7 @@ function extractStepSubagents(toolItems, stepIndex, t) {
     const isSendMsg = /^(?:send_message|collaboration__send_message)$/.test(item.name || '')
     if (!label || isSendMsg || /^给子任务发消息/.test(rawSum)) return
     const combined = `${rawSum}\n${item.output || ''}`
-    const isAsyncSpawn = /^(?:spawn_agent|collaboration__spawn_agent|followup_task|collaboration__followup_task)$/.test(item.name || '')
+    const isAsyncSpawn = /^(?:spawn_agent|collaboration__spawn_agent|followup_task|collaboration__followup_task|invoke_subagent)$/.test(item.name || '')
     let state = 'sent'
     let badge = t('agentSent')
     let report = ''
@@ -588,7 +588,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
         color,
         itemCount: records.length,
         count: t('itemCount', { n: records.length }),
-        tok: curTok == null ? t('notRecorded') : `≈${(curTok / 1000).toFixed(1)}k`,
+        tok: curTok == null ? '' : `≈${(curTok / 1000).toFixed(1)}k`,
         pct: observedOnly || curTok == null ? '' : `${kindPct(curTok)}%`,
         delta: stepIdx >= 0 ? fmtCountDelta(records.length, prevCount) : '',
         tokDelta: stepIdx >= 0 && !observedOnly ? fmtTokDelta(curTok, prevTok) : '',
@@ -611,6 +611,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
   let prevDisp = computeDisplayBuckets()
   const initTotal = prevDisp.sys + prevDisp.schema + prevDisp.user + prevDisp.mem + prevDisp.skill + prevDisp.msg + prevDisp.tool
   let observedUsage = initCtx.estimatedTokens ?? null
+  let observedEstimated = initCtx.estimatedTokens != null
   const openingTokens = observedOnly ? observedUsage : initTotal
   const initCap = observedOnly ? windowSpec.tokens : Math.max(windowSpec.tokens, Math.ceil(initTotal * 1.25))
   const initCapPct = val => (!initCap || val <= 0 ? 0 : Number((Math.max(0.4, (val / initCap) * 100)).toFixed(2)))
@@ -740,6 +741,21 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
       const cItem = first
       if (observedOnly) {
         compactInfo = { seq: compactSeq, title: t('compactTitle', { seq: compactSeq }) }
+        const preTokens = !observedEstimated && observedUsage > 0 ? observedUsage : null
+        let postTokens = null
+        for (let next = index + 1; next < rawGroups.length; next++) {
+          if (rawGroups[next].groupType === 'compact') break
+          const found = rawGroups[next].items.find(it => it.contextTokens > 0)?.contextTokens
+          if (found > 0) {
+            postTokens = found
+            break
+          }
+        }
+        if (preTokens != null && postTokens != null && preTokens > postTokens) {
+          compactInfo.preTokens = preTokens
+          compactInfo.postTokens = postTokens
+          compactInfo.droppedTokens = preTokens - postTokens
+        }
         if (cItem.text) {
           compactInfo.content = cItem.text
           compactInfo.docId = `compact-doc-${index}`
@@ -1026,7 +1042,13 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
     if (observedOnly) {
       const limit = group.items.findLast(item => item.contextWindow != null)?.contextWindow
       if (limit != null) windowSpec = resolveWindowCapacity(sessionTool, sessionModel, limit)
-      observedUsage = sample ?? null
+      if (group.groupType === 'compact') {
+        observedUsage = sample ?? null
+        observedEstimated = false
+      } else if (sample != null) {
+        observedUsage = sample
+        observedEstimated = false
+      }
     }
     const totalTokens = observedOnly ? observedUsage : bucketTotal
     const deltaTokens = totalTokens == null || previousUsage == null ? null : totalTokens - previousUsage
@@ -1061,7 +1083,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
         windowTokens: windowSpec.tokens,
         windowLabel: windowSpec.label,
         totalTokens,
-        ...(observedOnly && totalTokens != null && { estimated: false }),
+        ...(observedOnly && totalTokens != null && { estimated: observedEstimated }),
         deltaTokens,
         segments: observedOnly ? { used: Math.min(pct ?? 0, 100) } : {
           sys: capPct(disp.sys),
@@ -1176,6 +1198,23 @@ export function sumStats(items) {
 }
 
 export const minutes = seconds => Math.max(1, Math.round(seconds / 60))
+
+export function formatDuration(seconds = 0, lang = 'zh') {
+  const s = Math.max(0, Math.round(seconds))
+  if (s < 60) return lang === 'en' ? `${Math.max(1, s)}s` : `${Math.max(1, s)} 秒`
+  const totalMins = Math.round(s / 60)
+  if (totalMins < 60) return lang === 'en' ? `${totalMins}m` : `${totalMins} 分钟`
+  const totalHours = Math.floor(totalMins / 60)
+  const remMins = totalMins % 60
+  if (totalHours < 24) {
+    if (lang === 'en') return remMins ? `${totalHours}h ${remMins}m` : `${totalHours}h`
+    return remMins ? `${totalHours} 小时 ${remMins} 分` : `${totalHours} 小时`
+  }
+  const days = Math.floor(totalHours / 24)
+  const remHours = totalHours % 24
+  if (lang === 'en') return remHours ? `${days}d ${remHours}h` : `${days}d`
+  return remHours ? `${days} 天 ${remHours} 小时` : `${days} 天`
+}
 
 const statKeyMap = [
   ['search', 'statSearch'],

@@ -262,5 +262,6 @@ export function sumStats(items: SessionItem[]): Record<string, number>
 export function describeStats(stats: Record<string, number>, lang?: PlayerLang | ((k: string, v?: any) => string)): string
 export function kindOf(stats?: Record<string, number>): 'send' | 'back' | 'look' | 'make'
 export function minutes(seconds?: number): number
+export function formatDuration(seconds?: number, lang?: PlayerLang): string
 export function wallClock(start: string, seconds?: number, withSeconds?: boolean): string
 export function elapsedClock(seconds?: number): string
