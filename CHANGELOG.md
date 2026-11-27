@@ -4,6 +4,17 @@ All notable changes to `@niracler/encore` will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-27
+
+### Added
+- Antigravity replays now recover pruned opening context (`promptSections`, `tools`, `tokenBreakdown`, and individual mounted `skills`) from surviving `gen_metadata` rows, calibrate 7-color context bars against recorded token counts, and archive tool outputs on compaction.
+- Pair Antigravity `invoke_subagent` calls with `SYSTEM_MESSAGE` completion reports into clickable sub-agent report modals, map `send_message` recipients to role names, and render `exit_plan_mode` Markdown plans as inline `MD` Doc Cards.
+- Export `formatDuration()` alongside `elapsedClock()` (now formatting `>= 24h` durations as `Nd HH:MM:SS`).
+
+### Fixed
+- Unify context snapshot usage units to `k`/`M` (with exact counts in `title` tooltips), preserve recorded Antigravity window limits as the exact percentage denominator above 80%, preserve usage across filtered UI-only `update_focus`/`update_steps` responses, and mark post-checkpoint usage unknown when no post-compaction sample exists.
+- Suppress recovered transient API retry errors while preserving terminal stream interruptions, stop capturing Antigravity prose `file://` links as deliverables, snap scroll on timeline seeks, auto-hide the timeline hover popover after selection, and fix coverless `.session-file` card layout.
+
 ## [0.4.1] - 2026-11-26
 
 ### Fixed
@@ -62,7 +73,8 @@ All notable changes to `@niracler/encore` will be documented in this file.
 - Live 7-bucket Context Window inspector, compaction handoff boundaries, sub-agent report modals, WebP frame extraction, and automatic privacy redaction.
 - Bilingual (`zh` / `en`) UI and companion curation skill (`skills/encore/SKILL.md`).
 
-[Unreleased]: https://github.com/niracler/encore/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/niracler/encore/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/niracler/encore/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/niracler/encore/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/niracler/encore/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/niracler/encore/compare/v0.2.0...v0.3.0
