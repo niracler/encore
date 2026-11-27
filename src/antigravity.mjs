@@ -5,8 +5,7 @@ import { readFile, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { createTranscript, describeTool } from './common.mjs'
-import { redactText } from './redact.mjs'
-import { fileReferences, recordedText, within } from './external-files.mjs'
+import { fileReferences, within } from './external-files.mjs'
 
 export const antigravityStores = () => ({
   'antigravity-app': join(homedir(), '.gemini', 'antigravity', 'brain'),
@@ -83,11 +82,22 @@ function reviewedFiles(name, args, cwd) {
   if (name === 'exit_plan_mode' && typeof args.plan === 'string' && args.plan.trim()) {
     const plan = args.plan.trim()
     if (/^(?:file:\/\/|\/|[A-Z]:[\\/])[^\n]*\.md$/i.test(plan)) return fileReferences([plan], cwd)
-    return [{ title: 'implementation_plan.md', [recordedText]: redactText(plan) }]
   }
   return []
 }
 
+function parseSubagentReply(content = '', subagents = new Map()) {
+  const match = String(content).match(/\[Message\][^\n]*?\bsender=([^\s\]]+)[^\n]*?\bcontent=([\s\S]*?)(?:\s*<\/SYSTEM_MESSAGE>\s*)?$/)
+  if (!match) return null
+  const [, sender, rawReport] = match
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sender)
+  const agent = subagents.get(sender) || (isUuid ? `Subagent ${sender.slice(0, 8)}` : '')
+  if (!agent) return null
+  const report = rawReport.replace(/^(?:COMPLETED\s*\/\s*TASK_COMPLETED|TASK_COMPLETED|COMPLETED)\s*\n+/i, '').trim()
+  return report ? { agent, report } : null
+}
+
+const TRANSIENT_ERROR_RE = /^(?:API error \(attempt \d+\):|The stream was interrupted\.)/i
 const IGNORED_UI_TOOLS = new Set(['update_focus', 'update_steps'])
 
 export async function readAntigravity(records, { file, tool, native, images, assetRoots, includeMemory }) {
@@ -101,6 +111,8 @@ export async function readAntigravity(records, { file, tool, native, images, ass
   if (native) roots.push(await realpath(native.root))
   const userSelected = Boolean(native?.workspaces?.length && !assetRoots)
   let pending = []
+  const pendingSubagents = new Map()
+  const subagents = new Map()
   let model
   let tokens = 0
   for (const record of records) {
@@ -134,6 +146,13 @@ export async function readAntigravity(records, { file, tool, native, images, ass
           pending.push(null)
           continue
         }
+        const inlinePlan = base === 'exit_plan_mode' && typeof args.plan === 'string' && args.plan.trim()
+          && !/^(?:file:\/\/|\/|[A-Z]:[\\/])[^\n]*\.md$/i.test(args.plan.trim())
+          ? args.plan.trim()
+          : undefined
+        const recipientRole = base === 'send_message' && typeof args.Recipient === 'string'
+          ? subagents.get(args.Recipient)
+          : undefined
         const details = describeTool(base, {
           ...args,
           ...(args.CommandLine && { command: args.CommandLine }),
@@ -143,7 +162,18 @@ export async function readAntigravity(records, { file, tool, native, images, ass
           ...(args.Prompt && { prompt: args.Prompt }),
           ...(args.Message && { message: args.Message }),
         })
+        if (inlinePlan) {
+          details.input = inlinePlan
+          details.file = 'implementation_plan.md'
+        }
+        if (recipientRole) {
+          details.summary = `给子任务发消息：${recipientRole}`
+          if (args.Message) details.input = args.Message
+        }
         const item = transcript.tool(id, { ...details, name, ...usage }, time)
+        if (base === 'invoke_subagent') {
+          pendingSubagents.set(id, args.Role || args.TypeName || item.agent || 'Subagent')
+        }
         const files = reviewedFiles(base, args, cwd)
         if (files.length) item.deliverables = files
         pending.push(id)
@@ -154,8 +184,27 @@ export async function readAntigravity(records, { file, tool, native, images, ass
       if (id === null) continue
       const output = content.replace(/^(?:(?:Created At|Completed At):[^\n]*(?:\n|$))+/u, '').trim()
       const done = content.match(/^Completed At:\s*([^\r\n]+)/m)?.[1] || time
-      if (id !== undefined) transcript.result(id, [output, record.error].filter(Boolean).join('\n'), done,
-        images ? await loadMedia(record.media, logDir, roots) : [], cwd)
+      if (id !== undefined) {
+        if (pendingSubagents.has(id)) {
+          const convId = output.match(/"conversationId"\s*:\s*"([^"]+)"/)?.[1]
+          if (convId) subagents.set(convId, pendingSubagents.get(id))
+          pendingSubagents.delete(id)
+        }
+        transcript.result(id, [output, record.error].filter(Boolean).join('\n'), done,
+          images ? await loadMedia(record.media, logDir, roots) : [], cwd)
+      }
+    } else if (type === 'SYSTEM_MESSAGE') {
+      const subagentReply = parseSubagentReply(content, subagents)
+      if (subagentReply) {
+        transcript.tool(null, {
+          name: 'agent-message',
+          kind: 'reply',
+          summary: `子任务交回结果：${subagentReply.agent}`,
+          output: subagentReply.report,
+          stats: { reply: 1 },
+          agent: subagentReply.agent,
+        }, time)
+      }
     } else if (type === 'CHECKPOINT' && record.status === 'DONE' && !record.error) {
       const summary = content.match(/<summary>([\s\S]*?)<\/summary>/i)?.[1]?.trim()
       const text = summary && !includeMemory
@@ -163,7 +212,10 @@ export async function readAntigravity(records, { file, tool, native, images, ass
         : summary
       transcript.compact(text ? { text } : {}, time)
     } else if (type === 'ERROR_MESSAGE') {
-      transcript.assistant(record.error || content, time)
+      const text = String(record.error || content || '').trim()
+      if (text && !TRANSIENT_ERROR_RE.test(text)) {
+        transcript.assistant(text, time)
+      }
     }
   }
   return transcript.finish({ tool, model, tokens: tokens || undefined,

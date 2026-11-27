@@ -77,11 +77,16 @@ test('imports exactly the specified Antigravity transcript with portable step me
     assert.ok(item.images.includes(frame.img))
     assert.equal((await sharp(readFileSync(join(replay.dir, frame.img))).metadata()).format, 'webp')
   }
-  for (const [item, contents] of [[tools[2], '# Plan\nReview layout.'], [tools[3], '# Finished']]) {
-    assert.equal(item.deliverables.length, 1)
-    assert.equal(readFileSync(join(replay.dir, item.deliverables[0].href), 'utf8'), contents)
-  }
-  assert.doesNotMatch(JSON.stringify(timeline(replay.session).initialSnapshot), /Codex System/)
+  assert.equal(tools[2].deliverables, undefined)
+  assert.equal(tools[2].file, 'implementation_plan.md')
+  assert.equal(tools[2].input, '# Plan\nReview layout.')
+  assert.equal(tools[3].deliverables.length, 1)
+  assert.equal(readFileSync(join(replay.dir, tools[3].deliverables[0].href), 'utf8'), '# Finished')
+  const replayLine = timeline(replay.session)
+  const planDoc = replayLine.steps.flatMap(s => s.docs || []).find(d => d.file === 'implementation_plan.md')
+  assert.equal(planDoc?.title, 'Review layout.')
+  assert.equal(planDoc?.content, '# Plan\nReview layout.')
+  assert.doesNotMatch(JSON.stringify(replayLine.initialSnapshot), /Codex System/)
   const short = await buildReplay(slim, { outDir: join(root, 'short'), images: false })
   assert.equal(short.session.items.at(-1).text, 'Short answer')
   assert.equal(short.session.frames, undefined)
@@ -271,7 +276,7 @@ test('the native first request restores mounted context without counting the use
   assert.deepEqual(line.steps.map(s => s.contextSnapshot.windowTokens), [512000, 512000, 256000, null])
 })
 
-test('only completed Antigravity checkpoints mark compaction; unmeasured steps have no invented usage or threshold', async t => {
+test('only completed Antigravity checkpoints mark compaction and recover pruned opening context', async t => {
   const dir = sandbox(t)
   const file = join(dir, 'transcript.jsonl')
   const checkpoint = step(4, 'CHECKPOINT', { source: 'SYSTEM', content: '<summary>Recorded summary</summary>', input_tokens: 999 })
@@ -294,21 +299,62 @@ test('only completed Antigravity checkpoints mark compaction; unmeasured steps h
   assert.equal(cp.compactInfo.preTokens, 10000)
   assert.equal(cp.compactInfo.postTokens, 5000)
   assert.equal(cp.compactInfo.droppedTokens, 5000)
-  assert.equal(cp.contextSnapshot.totalTokens, null)
-  assert.equal(line.steps[cp.index + 1].contextSnapshot.totalTokens, null)
+  assert.equal(cp.contextSnapshot.totalTokens, 5000)
+  assert.equal(line.steps[cp.index + 1].contextSnapshot.totalTokens, 5180)
   assert.equal(line.steps.at(-1).contextSnapshot.totalTokens, 5000)
+  assert.equal(cp.contextSnapshot.categories.find(c => c.id === 'tool').itemCount, 0)
   const html = renderPlayerWidget(session, line, { lang: 'zh' })
   assert.match(html, /上下文压缩 #1/)
   assert.match(html, /10\.0k → 5\.0k/)
   assert.ok(html.includes('datetime="' + checkpoint.created_at + '"'))
-  assert.doesNotMatch(html, /自动压缩|lc-trigger|lc-reserve|已归档前序|释放约/)
+  assert.doesNotMatch(html, /自动压缩|lc-trigger|lc-reserve/)
 })
 
-test('Antigravity replays carry forward recorded usage across user turns, unify token units, hide empty legends, filter UI status calls, and surface sub-agents', async t => {
+test('Antigravity replays calibrate 7-color context, pair sub-agent replies, filter transient retries, and recover pruned DB baselines', { skip: !process.getBuiltinModule?.('node:sqlite') }, async t => {
+  const { default: protobuf } = await import('protobufjs')
+  const { DatabaseSync } = process.getBuiltinModule('node:sqlite')
+  const { readAntigravityContext } = await import('../src/antigravity-context.mjs')
+  const { fileURLToPath } = await import('node:url')
+  const generation = protobuf.loadSync(fileURLToPath(new URL('../src/antigravity-context.proto', import.meta.url))).lookupType('CortexStepGeneratorMetadata')
+
+  // Verify fallback recovery when Antigravity prunes promptSections/tools/tokenBreakdown from idx=0.
+  const dbRoot = sandbox(t)
+  const native = { id: 'pruned', root: join(dbRoot, 'brain', 'pruned') }
+  mkdirSync(join(dbRoot, 'conversations'))
+  const db = new DatabaseSync(join(dbRoot, 'conversations', 'pruned.db'))
+  db.exec('CREATE TABLE gen_metadata(idx INTEGER PRIMARY KEY, data BLOB)')
+  const insert = db.prepare('INSERT INTO gen_metadata VALUES (?,?)')
+  insert.run(0, generation.encode({ stepIndices: [1], chatModel: {
+    chatStartMetadata: { contextWindowMetadata: { maxContextTokens: 512000 } },
+  } }).finish())
+  insert.run(5, generation.encode({ stepIndices: [9], chatModel: {
+    promptSections: [
+      { title: 'identity', content: 'You are Antigravity.', tokenType: 1 },
+      { title: 'skills', content: 'Available skills:\n- encore (/a/encore/SKILL.md): Replay sessions\n- slidev (/a/slidev/SKILL.md): Build decks', tokenType: 5 },
+    ],
+    tools: [{ name: 'read_file', description: 'Read file', jsonSchemaString: '{}' }],
+    chatStartMetadata: { contextWindowMetadata: { maxContextTokens: 512000, tokenBreakdown: {
+      totalTokens: 1500,
+      groups: [
+        { name: 'System Prompt', type: 1, source: 1, numTokens: 300, children: [{ name: 'identity', numTokens: 300 }] },
+        { name: 'Tools', type: 2, source: 1, numTokens: 400, children: [{ name: 'read_file', numTokens: 400 }] },
+        { name: 'Skills', type: 5, source: 1, numTokens: 500, children: [{ name: 'skills', numTokens: 500 }] },
+        { name: 'Chat Messages', type: 7, source: 0, numTokens: 300 },
+      ],
+    } } },
+  } }).finish())
+  db.close()
+  const recovered = readAntigravityContext(native, [step(0, 'USER_INPUT', {}), step(1, 'PLANNER_RESPONSE', {}), step(9, 'PLANNER_RESPONSE', {})])
+  assert.equal(recovered.initialContext.estimatedTokens, 1200)
+  assert.equal(recovered.initialContext.sys[0].tag, 'Core')
+  assert.deepEqual(recovered.initialContext.skill.map(s => s.title), ['encore', 'slidev'])
+  assert.equal(recovered.initialContext.skill.reduce((n, s) => n + s.tokEst, 0), 500)
+
   const dir = sandbox(t)
   const file = join(dir, 'transcript.jsonl')
   const note = join(dir, 'outside.md')
   writeFileSync(note, '# External note')
+  const subUuid = 'b8533277-34b9-4e68-89bc-f15d5cfa5d07'
   log(file, [
     step(0, 'USER_INPUT', { content: '<USER_REQUEST>Start work</USER_REQUEST>' }),
     step(1, 'PLANNER_RESPONSE', {
@@ -322,34 +368,53 @@ test('Antigravity replays carry forward recorded usage across user turns, unify 
     }),
     step(2, 'GENERIC', { content: 'OK' }),
     step(3, 'GENERIC', { content: 'OK' }),
-    step(4, 'GENERIC', { content: 'Created the following subagent:\n{"conversationId":"sub-1"}' }),
-    step(5, 'PLANNER_RESPONSE', { content: `Reviewed [outside.md](${pathToFileURL(note).href}) and finished.`, input_tokens: 308861 }),
-    step(6, 'USER_INPUT', { content: '<USER_REQUEST>Next turn without new token sample</USER_REQUEST>' }),
-    step(7, 'CHECKPOINT', { source: 'SYSTEM', content: '<summary>Final checkpoint without post sample</summary>' }),
+    step(4, 'GENERIC', { content: `Created the following subagent:\n{"conversationId":"${subUuid}"}` }),
+    step(5, 'SYSTEM_MESSAGE', {
+      source: 'SYSTEM',
+      content: `The following is a <SYSTEM_MESSAGE> not actually sent by the user.\n\n<SYSTEM_MESSAGE>\n[Message] timestamp=2026-11-24T06:33:07Z sender=${subUuid} priority=MESSAGE_PRIORITY_HIGH content=COMPLETED / TASK_COMPLETED\n\nVerified slide 14 renders cleanly with zero layout overflow.\n</SYSTEM_MESSAGE>`,
+    }),
+    step(6, 'ERROR_MESSAGE', {
+      source: 'SYSTEM',
+      error: 'API error (attempt 1): request failed: Post "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse": EOF',
+    }),
+    step(7, 'PLANNER_RESPONSE', { content: `Reviewed [outside.md](${pathToFileURL(note).href}) and finished.`, input_tokens: 308861 }),
+    step(8, 'USER_INPUT', { content: '<USER_REQUEST>Next turn without new token sample</USER_REQUEST>' }),
+    step(9, 'CHECKPOINT', { source: 'SYSTEM', content: '<summary>Final checkpoint without post sample</summary>' }),
   ])
   const { session } = await buildReplay(file, { outDir: join(dir, 'replay'), images: false })
   const toolItems = session.items.filter(item => item.type === 'tool')
-  assert.deepEqual(toolItems.map(item => item.name), ['invoke_subagent'])
+  assert.deepEqual(toolItems.map(item => item.name), ['invoke_subagent', 'agent-message'])
   assert.equal(toolItems[0].agent, 'Slide Previewer')
-  const reply = session.items.find(item => item.type === 'assistant')
-  assert.equal(reply.deliverables, undefined, 'Antigravity prose file:// links should not spam deliverables')
+  assert.equal(toolItems[1].agent, 'Slide Previewer')
+  assert.match(toolItems[1].output, /^Verified slide 14 renders cleanly/)
+  const replies = session.items.filter(item => item.type === 'assistant')
+  assert.equal(replies.length, 1, 'transient API retry errors should not render as assistant replies')
+  assert.equal(replies[0].deliverables, undefined, 'Antigravity prose file:// links should not spam deliverables')
 
-  const line = timeline({ ...session, contextWindow: 512000 }, { lang: 'zh' })
+  const line = timeline({ ...session, contextWindow: 512000, initialContext: recovered.initialContext }, { lang: 'zh' })
   const workStep = line.steps.find(s => s.subagents?.length)
-  assert.ok(workStep, 'invoke_subagent should render as a sub-agent pill')
+  assert.ok(workStep, 'invoke_subagent and its reply should render as sub-agent pills')
   assert.equal(workStep.subagents[0].label, 'Slide Previewer')
   assert.equal(workStep.subagents[0].state, 'sent')
+  assert.equal(workStep.subagents[1].label, 'Slide Previewer')
+  assert.equal(workStep.subagents[1].state, 'done')
+  assert.match(workStep.subagents[1].report, /Verified slide 14/)
+  assert.ok(workStep.contextSnapshot.segments.tool > 0, 'Antigravity should render 7-color calibrated segments')
+  assert.equal(workStep.contextSnapshot.totalTokens, 308861)
 
   const secondUser = line.steps.find(s => s.kind === 'prompt' && s.turn === 2)
-  assert.equal(secondUser.contextSnapshot.totalTokens, 308861, 'subsequent user turns should carry forward recorded usage instead of flickering to null')
-  assert.equal(secondUser.contextSnapshot.pct, 60.3)
+  assert.ok(secondUser.contextSnapshot.totalTokens > 308861, 'subsequent user turns should add estimated prompt delta on top of last recorded sample')
+  assert.equal(secondUser.contextSnapshot.pct, 60.4)
 
   const trailingCompact = line.steps.find(s => s.compactInfo)
   assert.equal(trailingCompact.compactInfo.droppedTokens, undefined, 'checkpoint without a post-compaction sample must not invent droppedTokens')
+  assert.equal(trailingCompact.compactInfo.archivedTools, 2)
+  assert.equal(trailingCompact.contextSnapshot.categories.find(c => c.id === 'tool').itemCount, 0)
 
-  const html = renderPlayerWidget({ ...session, contextWindow: 512000 }, line, { lang: 'zh' })
-  assert.match(html, /data-lc-legend hidden/, '7-chip legend should stay hidden when no category token breakdown exists')
-  assert.doesNotMatch(html, /class="lc-br-tokens">未记录</, 'category rows should not repeat 未记录 when breakdown is absent')
+  const html = renderPlayerWidget({ ...session, contextWindow: 512000, initialContext: recovered.initialContext }, line, { lang: 'zh' })
+  assert.doesNotMatch(html, /data-lc-legend hidden/, '7-chip legend should be visible when context baseline exists')
+  assert.match(html, /data-seg="sys"/)
+  assert.match(html, /查看报告/)
   assert.equal(elapsedClock(210452), '2d 10:27:32')
   assert.equal(formatDuration(210452, 'zh'), '2 天 10 小时')
   assert.equal(formatDuration(210452, 'en'), '2d 10h')

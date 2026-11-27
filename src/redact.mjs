@@ -53,7 +53,7 @@ export function clipSession(session, { input = 1500, output = 2000, report = 600
   const items = (session.items || []).map(item => {
     if (item.type === 'reasoning') return { ...item, text: clip(item.text, reasoning)[0] }
     if (item.type !== 'tool') return item
-    const [clippedInput, inputOmitted] = clip(item.input, input)
+    const [clippedInput, inputOmitted] = clip(item.input, item.name === 'exit_plan_mode' ? report : input)
     const [clippedOutput, outputOmitted] = clip(item.output, item.stats?.agent || item.stats?.reply ? report : output)
     const next = { ...item, input: clippedInput, output: clippedOutput }
     if (inputOmitted + outputOmitted) next.omitted = inputOmitted + outputOmitted
