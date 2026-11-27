@@ -15,11 +15,21 @@
 npx @niracler/encore@latest
 ```
 
-Requires Node.js 20.10 or later. Choose a local Codex, Claude Code, WorkBuddy or Antigravity session to open its replay in your browser. Press `Tab` to switch agents and `/` to search titles and first user messages in the current tab. Search includes identifiable archived sessions. `Esc` restores your previous position.
+Requires Node.js 20.10+. Pick a local session interactively, or pass a log file directly (such as Claude.ai `conversations.json`). Add `-o ./my-replay` to save outside the temporary directory.
 
-Antigravity App and CLI share a tab with the source shown on each row. The picker prefers `transcript_full.jsonl` and falls back to `transcript.jsonl`. Passing a path imports exactly that file. The picker reads the Antigravity index using Node’s built-in SQLite or a local `sqlite3` executable. If the index is unavailable, it uses transcripts and title annotations and cannot identify archives recorded only in the index. For Claude.ai, pass the path to your exported `conversations.json` to the same command.
+## Supported agents
 
-Encore writes to a temporary directory by default. To keep the replay, add `-o ./my-replay` to the command.
+<!-- adapter-matrix:start -->
+| Agent | Opening context | Token & 7-color bar | Compaction | Sub-agent reports | Markdown drafts | Media frames | Memory redaction |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Codex | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Claude Code | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Antigravity (App / CLI) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| WorkBuddy | — | — | — | — | ✅ | ✅ | — |
+| Claude.ai | — | — | — | — | — | — | — |
+<!-- adapter-matrix:end -->
+
+`—` means the source log format does not record that signal. Verified on every commit by [`test/adapter-conformance.test.mjs`](./test/adapter-conformance.test.mjs).
 
 ## How it works
 
@@ -91,9 +101,7 @@ A verified file matches the SHA-256 checksum recorded in the log. An export-time
 <details>
 <summary>Can I use the context token counts to check my bill?</summary>
 
-The counts show how the context changes during a session. Encore uses recorded counts where available and estimates missing step or category counts from content length.
-
-For native Antigravity sessions, Encore reads the recorded system instructions and tool definitions from the first model request. The opening estimate (`≈`) counts system-side groups and excludes the first user message. Missing usage and window limits are labeled separately. Completed checkpoints appear on the timeline at their recorded times.
+The counts show how context grows and compacts during a session. Encore anchors to recorded token totals where available and estimates per-category breakdowns from content length. Unmetered logs without recorded totals or window limits are labeled as unknown rather than fabricated.
 
 </details>
 

@@ -24,6 +24,7 @@ Encore strictly separates data, browser player, and CLI tooling:
   ```
   `test/encore.test.mjs` asserts that `player/encore-player.js` matches `buildStandalonePlayerJs({ write: false })`.
 - **Keep Schema & Types Aligned**: When adding fields to `session.json` or changing public exports in `src/index.mjs`, update both `schema/session.schema.json` and `src/index.d.ts`.
+- **Adapter Conformance Contract**: Every supported tool in `src/common.mjs` and `schema/session.schema.json` must be registered in `ADAPTER_CONTRACT` inside `test/adapter-conformance.test.mjs` with explicit capability flags (plus a reason for each `false` capability), a minimal fixture covering every `true` capability, and matching rows in the `README.md` / `README.zh-CN.md` capability tables. CI fails if a new agent adapter omits registration, breaks shared invariants, or leaves README tables out of sync.
 
 ## 3. Verification Commands
 
