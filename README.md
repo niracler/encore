@@ -15,9 +15,7 @@
 npx @niracler/encore@latest
 ```
 
-Requires Node.js 20.10 or later. Pick a local Codex, Claude Code, WorkBuddy, or Antigravity session to open its replay in your browser (`Tab` switches agents, `/` searches titles and first prompts including archived sessions, `Esc` resets). For Claude.ai, pass the path to your exported `conversations.json`.
-
-Encore writes to a temporary directory by default. To keep the replay, add `-o ./my-replay`.
+Requires Node.js 20.10+. Pick a local session interactively, or pass a log file directly (such as Claude.ai `conversations.json`). Add `-o ./my-replay` to save outside the temporary directory.
 
 ## Supported agents
 
@@ -104,13 +102,6 @@ A verified file matches the SHA-256 checksum recorded in the log. An export-time
 <summary>Can I use the context token counts to check my bill?</summary>
 
 The counts show how context grows and compacts during a session. Encore anchors to recorded token totals where available and estimates per-category breakdowns from content length. Unmetered logs without recorded totals or window limits are labeled as unknown rather than fabricated.
-
-</details>
-
-<details>
-<summary>How does Encore read Antigravity logs and SQLite metadata?</summary>
-
-Antigravity App and CLI share one tab in the picker, preferring `transcript_full.jsonl` over `transcript.jsonl` (passing a file path imports that exact file). Encore reads the local SQLite index and context metadata via Node’s built-in SQLite or a local `sqlite3` binary; when unavailable, it falls back to raw transcripts and title annotations.
 
 </details>
 

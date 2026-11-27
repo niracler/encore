@@ -15,9 +15,7 @@
 npx @niracler/encore@latest
 ```
 
-需要 Node.js 20.10 或更高版本。从列表中选择本地 Codex、Claude Code、WorkBuddy 或 Antigravity 会话即可在浏览器中回看（`Tab` 切换 Agent、`/` 搜索含归档在内的标题和首条消息、`Esc` 复位）。Claude.ai 会话直接传入导出的 `conversations.json` 路径即可。
-
-回放默认写入系统临时目录。想保留下来，在命令末尾加上 `-o ./my-replay`。
+需要 Node.js 20.10+。直接选择本地会话，或传入日志文件路径（如 Claude.ai 的 `conversations.json`）。加上 `-o ./my-replay` 可将回放保留到指定目录（默认写入临时目录）。
 
 ## 支持的 Agent
 
@@ -104,13 +102,6 @@ npx @niracler/encore@latest play ./my-replay
 <summary>上下文里的 Token 数能用来核对账单吗？</summary>
 
 这些数值用于观察会话中上下文的增长与压缩。日志提供实测总量时以记录值为锚点，分类占比按内容长度估算；缺少用量或窗口上限记录时直接标为未知，不编造默认值。
-
-</details>
-
-<details>
-<summary>Antigravity 日志和 SQLite 索引是怎么读取的？</summary>
-
-选择器中 Antigravity App 与 CLI 共用一个标签，优先读取 `transcript_full.jsonl`（缺失时回退 `transcript.jsonl`；手动传路径时读取指定文件）。索引与上下文底座通过 Node.js 内置 SQLite 或本机 `sqlite3` 读取，不可用时回退到本地日志与标题文件。
 
 </details>
 
