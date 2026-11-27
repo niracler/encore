@@ -809,7 +809,7 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
       } else if (isAntigravity) {
         lastRealTotal = 0
         uncalibratedDelta = 0
-        if (initTotal === 0 && initCtx.estimatedTokens == null) hasUsage = false
+        hasUsage = false
       }
 
       const rangeMeta = preTokens != null && postTokens != null

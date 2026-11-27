@@ -408,6 +408,7 @@ test('Antigravity replays calibrate 7-color context, pair sub-agent replies, fil
 
   const trailingCompact = line.steps.find(s => s.compactInfo)
   assert.equal(trailingCompact.compactInfo.droppedTokens, undefined, 'checkpoint without a post-compaction sample must not invent droppedTokens')
+  assert.equal(trailingCompact.contextSnapshot.totalTokens, null, 'checkpoint without a post-compaction sample must mark usage unknown')
   assert.equal(trailingCompact.compactInfo.archivedTools, 2)
   assert.equal(trailingCompact.contextSnapshot.categories.find(c => c.id === 'tool').itemCount, 0)
 
