@@ -15,11 +15,9 @@
 npx @niracler/encore@latest
 ```
 
-需要 Node.js 20.10 或更高版本。从「全部」或 Agent 标签中选择一段 Codex、Claude Code、WorkBuddy 或 Antigravity 会话，即可在浏览器中回看。按 `Tab` 切换标签，按 `/` 搜索当前标签下的标题和首条用户消息，按 `Esc` 返回原位置。搜索也会列出能识别的归档会话。
+需要 Node.js 20.10 或更高版本。从列表中选择本地 Codex、Claude Code、WorkBuddy 或 Antigravity 会话即可在浏览器中回看（`Tab` 切换 Agent、`/` 搜索含归档在内的标题和首条消息、`Esc` 复位）。Claude.ai 会话直接传入导出的 `conversations.json` 路径即可。
 
-Antigravity App 和 CLI 共用一个标签，每行显示来源。选择器优先使用 `transcript_full.jsonl`，缺少时读取 `transcript.jsonl`。手动传入路径时，Encore 读取指定文件。会话选择器通过 Node.js 内置 SQLite 或本机的 `sqlite3` 读取 Antigravity 索引。索引不可用时，使用本地日志和标题文件，此时无法识别索引中的归档状态。要回看 Claude.ai 会话，把导出的 `conversations.json` 路径传给同一条命令即可。
-
-回放默认写入系统临时目录。想保留下来，可以在命令末尾加上 `-o ./my-replay`。
+回放默认写入系统临时目录。想保留下来，在命令末尾加上 `-o ./my-replay`。
 
 ## 支持的 Agent
 
@@ -105,9 +103,14 @@ npx @niracler/encore@latest play ./my-replay
 <details>
 <summary>上下文里的 Token 数能用来核对账单吗？</summary>
 
-这些数值用于观察会话中的上下文变化。日志提供统计时使用记录值，缺少的步骤或分类明细按内容长度估算。
+这些数值用于观察会话中上下文的增长与压缩。日志提供实测总量时以记录值为锚点，分类占比按内容长度估算；缺少用量或窗口上限记录时直接标为未知，不编造默认值。
 
-对于 Antigravity 本机会话，Encore 从首次模型请求的记录中提取已加载的系统提示词和工具定义。初始用量取自系统侧分类的估算值（标为 `≈`），首条用户消息单独计入对应步骤。日志缺少开场统计时显示「初始用量未记录」，容量缺失时显示「上限未知」。时间线按日志中的事件时间标记压缩检查点。
+</details>
+
+<details>
+<summary>Antigravity 日志和 SQLite 索引是怎么读取的？</summary>
+
+选择器中 Antigravity App 与 CLI 共用一个标签，优先读取 `transcript_full.jsonl`（缺失时回退 `transcript.jsonl`；手动传路径时读取指定文件）。索引与上下文底座通过 Node.js 内置 SQLite 或本机 `sqlite3` 读取，不可用时回退到本地日志与标题文件。
 
 </details>
 
