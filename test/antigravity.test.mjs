@@ -420,3 +420,62 @@ test('Antigravity replays calibrate 7-color context, pair sub-agent replies, fil
   assert.equal(formatDuration(210452, 'en'), '2d 10h')
   assert.equal(formatDuration(1560, 'zh'), '26 分钟')
 })
+
+test('Antigravity preserves >80% window percentages, UI-only usage samples, prefixed plan tools, and terminal stream errors', async t => {
+  // 1. Recorded window is the exact percentage denominator (never inflated to 1.25x above 80%).
+  const highUsage = timeline({
+    tool: 'antigravity-app',
+    contextWindow: 100000,
+    initialContext: { estimatedTokens: 90000, sys: [{ id: 's1', title: 'sys', payload: 'p', tokEst: 90000 }] },
+    items: [
+      { type: 'user', text: 'Hi' },
+      { type: 'assistant', text: 'Near cap', contextTokens: 95000 },
+    ],
+  })
+  assert.equal(highUsage.initialSnapshot.pct, 90)
+  assert.equal(highUsage.steps[1].contextSnapshot.pct, 95)
+
+  // 2. UI-only PLANNER_RESPONSE preserves usage for subsequent compaction; prefixed exit_plan_mode produces MD Doc Card.
+  const dir = sandbox(t)
+  const file = join(dir, 'transcript.jsonl')
+  const longPlan = `# Implementation\n\n${'Detail line. '.repeat(200)}`.trim()
+  log(file, [
+    step(0, 'USER_INPUT', { content: 'Start' }),
+    step(1, 'PLANNER_RESPONSE', {
+      input_tokens: 10000,
+      tool_calls: [{ name: 'mcp_ide-tools_exit_plan_mode', args: { plan: longPlan } }],
+    }),
+    step(2, 'GENERIC', { content: 'approved' }),
+    step(3, 'PLANNER_RESPONSE', {
+      input_tokens: 90000,
+      tool_calls: [{ name: 'mcp_ide-tools_update_focus', args: { focus: 'Compacting' } }],
+    }),
+    step(4, 'GENERIC', { content: 'OK' }),
+    step(5, 'CHECKPOINT', { source: 'SYSTEM', content: '<summary>Checkpoint after UI-only step</summary>' }),
+    step(6, 'PLANNER_RESPONSE', { content: 'Resumed', input_tokens: 5000 }),
+  ])
+  const { session } = await buildReplay(file, { outDir: join(dir, 'replay'), images: false })
+  const line = timeline({ ...session, contextWindow: 100000 }, { lang: 'zh' })
+  const planDoc = line.steps.flatMap(s => s.docs || []).find(d => d.file === 'implementation_plan.md')
+  assert.equal(planDoc?.title, 'Implementation')
+  assert.equal(planDoc?.content.length, longPlan.length, 'prefixed exit_plan_mode should use report-sized clip limit')
+  const cp = line.steps.find(s => s.compactInfo)
+  assert.equal(cp.compactInfo.preTokens, 90000)
+  assert.equal(cp.compactInfo.postTokens, 5000)
+  assert.equal(cp.compactInfo.droppedTokens, 85000)
+
+  // 3. Terminal stream interruption without subsequent recovery is preserved with its timestamp.
+  const termFile = join(dir, 'terminal.jsonl')
+  const errRow = step(2, 'ERROR_MESSAGE', {
+    source: 'SYSTEM',
+    error: 'The stream was interrupted. Please continue the task you were working on.',
+  })
+  log(termFile, [
+    step(0, 'USER_INPUT', { content: 'Run long analysis' }),
+    errRow,
+  ])
+  const terminal = await buildReplay(termFile, { outDir: join(dir, 'term-replay'), images: false })
+  assert.equal(terminal.session.items.length, 2)
+  assert.match(terminal.session.items[1].text, /The stream was interrupted/)
+  assert.equal(terminal.session.ended, errRow.created_at)
+})

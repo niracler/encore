@@ -103,10 +103,12 @@ function extractFileChips(work) {
   return { tools, changes, memories }
 }
 
+const baseToolName = name => String(name || '').replace(/^mcp_ide-tools_/, '')
+
 function documentEdits(item) {
   const input = String(item.input || '').trim()
   if (!input) return []
-  if (item.name === 'exit_plan_mode' && !input.startsWith('{')) {
+  if (baseToolName(item.name) === 'exit_plan_mode' && !input.startsWith('{')) {
     return [{ path: item.file || 'implementation_plan.md', content: input }]
   }
   const isEdit = item.kind === 'edit' || item.stats?.edit
@@ -150,16 +152,17 @@ function extractStepDocs(toolItems, stepIndex) {
       if (!/\.md$/i.test(file) || file.startsWith('_') || /^\d{4}-\d{2}-\d{2}\.md$/.test(file)) continue
       const fm = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
       const body = fm ? fm[2].trim() : content
+      const isPlan = baseToolName(item.name) === 'exit_plan_mode'
       const rawTopHeading = body.match(/^#{1,2}\s+([^\r\n]+)/m)?.[1]?.replace(/^#+\s*/, '').trim()
       const anyHeading = body.match(/^#{1,3}\s+([^\r\n]+)/m)?.[1]?.replace(/^#+\s*/, '').trim()
-      const isGenericPlanHeading = item.name === 'exit_plan_mode'
+      const isGenericPlanHeading = isPlan
         && /^(?:goal|overview|summary|plan|目标|概述|计划)$/i.test(rawTopHeading || '')
-      const planFallback = item.name === 'exit_plan_mode'
+      const planFallback = isPlan
         ? body.split(/\r?\n/).find(line => line.trim() && !/^#{1,6}\s+/.test(line.trim()))
           ?.replace(/^[-*]\s+|[*_`]/g, '').trim().slice(0, 60)
         : ''
       const title = (isGenericPlanHeading ? (planFallback || rawTopHeading) : rawTopHeading)
-        || (item.name === 'exit_plan_mode' ? planFallback : anyHeading)
+        || (isPlan ? planFallback : anyHeading)
         || fm?.[1].match(/^\s*title\s*:\s*['"]?([^\r\n'"]+)['"]?\s*$/m)?.[1]?.trim()
       if (!title) continue
       byPath.set(path, {
@@ -196,10 +199,11 @@ function extractStepSubagents(toolItems, stepIndex, t) {
         .replace(/\s+交回结果$/, '')
         .trim()
     )
-    const isSendMsg = /^(?:send_message|collaboration__send_message)$/.test(item.name || '')
+    const toolBase = baseToolName(item.name)
+    const isSendMsg = /^(?:send_message|collaboration__send_message)$/.test(toolBase)
     if (!label || isSendMsg || /^给子任务发消息/.test(rawSum)) return
     const combined = `${rawSum}\n${item.output || ''}`
-    const isAsyncSpawn = /^(?:spawn_agent|collaboration__spawn_agent|followup_task|collaboration__followup_task|invoke_subagent)$/.test(item.name || '')
+    const isAsyncSpawn = /^(?:spawn_agent|collaboration__spawn_agent|followup_task|collaboration__followup_task|invoke_subagent)$/.test(toolBase)
     let state = 'sent'
     let badge = t('agentSent')
     let report = ''
@@ -628,8 +632,9 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
   const hasOpeningUsage = !isAntigravity || initTotal > 0 || initCtx.estimatedTokens != null
   const openingTokens = hasOpeningUsage ? (initCtx.estimatedTokens ?? initTotal) : null
   let hasUsage = hasOpeningUsage
-  const initCap = windowSpec.tokens == null ? null : Math.max(windowSpec.tokens, Math.ceil((openingTokens || 0) * 1.25))
-  const initCapPct = val => (!initCap || val <= 0 ? 0 : Number((Math.max(0.4, (val / initCap) * 100)).toFixed(2)))
+  const initCap = isAntigravity || windowSpec.tokens == null ? windowSpec.tokens : Math.max(windowSpec.tokens, Math.ceil((openingTokens || 0) * 1.25))
+  const initBarCap = initCap ? Math.max(initCap, initTotal) : null
+  const initCapPct = val => (!initBarCap || val <= 0 ? 0 : Number((Math.max(0.4, (val / initBarCap) * 100)).toFixed(2)))
   const initKindPct = val => Math.round((val / Math.max(1, initTotal)) * 100)
   const initialBuckets = hasOpeningUsage ? prevDisp : emptyBuckets
   const zeroCounts = {
@@ -1059,8 +1064,14 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
         uncalibratedDelta += stepEstimatedDelta
       }
     }
-    if (group.groupType === 'user' && lastRealTotal > 0) {
-      uncalibratedDelta += stepEstimatedDelta
+    if (group.groupType === 'user') {
+      if (first.contextTokens > 0) {
+        lastRealTotal = first.contextTokens
+        uncalibratedDelta = stepEstimatedDelta
+        hasUsage = true
+      } else if (lastRealTotal > 0) {
+        uncalibratedDelta += stepEstimatedDelta
+      }
     }
 
     const limit = group.items.findLast(item => item.contextWindow != null)?.contextWindow
@@ -1072,9 +1083,10 @@ function buildSteps(items, end, sessionTool = 'codex', sessionModel = '', frames
     const previousUsage = prevHasUsage ? prevTotal : null
     const totalTokens = hasUsage ? bucketTotal : null
     const deltaTokens = totalTokens == null || previousUsage == null ? null : totalTokens - previousUsage
-    const capacity = windowSpec.tokens == null ? null : Math.max(windowSpec.tokens, Math.ceil((totalTokens || 0) * 1.25))
+    const capacity = isAntigravity || windowSpec.tokens == null ? windowSpec.tokens : Math.max(windowSpec.tokens, Math.ceil((totalTokens || 0) * 1.25))
+    const barCap = capacity ? Math.max(capacity, bucketTotal) : null
     const pct = capacity && totalTokens != null ? Number(((totalTokens / capacity) * 100).toFixed(1)) : null
-    const capPct = value => (!capacity || value <= 0 ? 0 : Number((Math.max(0.4, (value / capacity) * 100)).toFixed(2)))
+    const capPct = value => (!barCap || value <= 0 ? 0 : Number((Math.max(0.4, (value / barCap) * 100)).toFixed(2)))
     const kindPct = value => Math.round((value / Math.max(1, bucketTotal)) * 100)
     const buckets = hasUsage ? disp : emptyBuckets
     prevBuckets = buckets
